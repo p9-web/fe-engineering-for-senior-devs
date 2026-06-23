@@ -1,15 +1,22 @@
 import { defineConfig } from 'vitepress'
 import type MarkdownIt from 'markdown-it'
 
-const modules = [
+// Modules are grouped by career-value tier, not by number — see course-syllabus.md.
+const tier1 = [
   { text: '01 · JS Runtime', link: '/module-1-js-runtime' },
   { text: '02 · Browser as OS', link: '/module-2-browser-os' },
+  { text: '08 · Network Bridge', link: '/module-8-network-bridge' },
+]
+const tier2 = [
   { text: '03 · Reactivity', link: '/module-3-reactivity' },
   { text: '04 · Data Structures', link: '/module-4-data-structures' },
   { text: '05 · Compilers & ASTs', link: '/module-5-compilers' },
+  { text: '10 · Build Systems', link: '/module-10-build-systems' },
+]
+const tier3 = [
   { text: '06 · Build From Scratch', link: '/module-6-build-things' },
+  { text: '11 · Browser APIs', link: '/module-11-browser-apis' },
   { text: '07 · Source-Reading', link: '/module-7-source-code-judgment' },
-  { text: '08 · Network Bridge', link: '/module-8-network-bridge' },
   { text: '09 · WebAssembly', link: '/module-9-wasm' },
 ]
 
@@ -57,7 +64,9 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Syllabus', link: '/course-syllabus' },
-      { text: 'Modules', items: modules },
+      { text: 'Tier 1 · Foundation', items: tier1 },
+      { text: 'Tier 2 · Differentiators', items: tier2 },
+      { text: 'Tier 3 · Rare Territory', items: tier3 },
     ],
     sidebar: [
       {
@@ -65,8 +74,16 @@ export default defineConfig({
         items: [{ text: 'Course Syllabus', link: '/course-syllabus' }],
       },
       {
-        text: 'Modules',
-        items: modules,
+        text: 'Tier 1 · Non-Negotiable Foundation',
+        items: tier1,
+      },
+      {
+        text: 'Tier 2 · The Differentiators',
+        items: tier2,
+      },
+      {
+        text: 'Tier 3 · Rare-Engineer Territory',
+        items: tier3,
       },
     ],
     socialLinks: [

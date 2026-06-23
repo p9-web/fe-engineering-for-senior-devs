@@ -15,10 +15,16 @@ hero:
       link: /course-syllabus
 
 features:
-  - title: Runtime internals
-    details: The event loop's exact scheduling, the microtask/macrotask split, V8 hidden classes and inline caching, and where memory actually lives.
-  - title: The browser as an OS
-    details: DOM/CSSOM construction, layout vs. paint vs. composite, the 16.67ms frame budget, and why layout thrashing is so expensive.
-  - title: Reactivity, decoded
-    details: track/trigger and dependency maps, fine-grained signals, virtual-DOM diffing, and compiler-driven reactivity — read from the source.
+  - title: Tier 1 · Non-Negotiable Foundation
+    details: The JS runtime (event loop, V8 hidden classes, memory), the browser as an OS (layout vs. paint vs. composite, the 16.67ms budget), and the network bridge. The bedrock every senior is assumed to have.
+    link: /module-1-js-runtime
+    linkText: Start the foundation
+  - title: Tier 2 · The Differentiators
+    details: Reactivity engines read from the source, the data structures underneath them, compilers and ASTs, and the build systems that turn thousands of files into executable code. Where most senior devs never go.
+    link: /module-3-reactivity
+    linkText: Go deeper
+  - title: Tier 3 · Rare-Engineer Territory
+    details: Build a reactive engine and a virtual scroller from scratch, wield the platform APIs that get work off the main thread, read the masters, and push past JavaScript into WebAssembly.
+    link: /module-6-build-things
+    linkText: Build the hard things
 ---
