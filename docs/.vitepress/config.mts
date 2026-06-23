@@ -15,6 +15,7 @@ const modules = [
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
+  base: '/fe-engineering-for-senior-devs/', // GitHub Pages project-site subpath
   title: 'FE Engineering for Senior Devs',
   description: 'From silicon to the screen — execution-level frontend engineering.',
   appearance: 'dark', // terminal theme is dark-first; toggle preserved
