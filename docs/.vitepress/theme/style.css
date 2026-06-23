@@ -1,0 +1,204 @@
+/* ============================================================
+   Terminal / Silicon theme
+   Token overrides + component styling for the VitePress default theme.
+   Dark is the primary theme; light is a clean fallback.
+   ============================================================ */
+
+/* ---- Brand + semantic tokens (light defaults) ---- */
+:root {
+  --vp-c-brand-1: #0e7490;      /* readable teal on white */
+  --vp-c-brand-2: #0891b2;
+  --vp-c-brand-3: #06b6d4;
+  --vp-c-brand-soft: rgba(6, 182, 212, 0.14);
+
+  /* align the "tip" custom-block with the brand */
+  --vp-c-tip-1: var(--vp-c-brand-1);
+  --vp-c-tip-2: var(--vp-c-brand-2);
+  --vp-c-tip-soft: var(--vp-c-brand-soft);
+
+  --silicon-accent: #9333ea;
+  --silicon-prompt: #16a34a;
+
+  /* hero */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #06b6d4 20%, #9333ea);
+  --vp-home-hero-image-background-image: linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(147, 51, 234, 0.3));
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+/* ---- Dark: the terminal theme ---- */
+.dark {
+  --vp-c-bg: #0a0e14;
+  --vp-c-bg-alt: #0d1117;
+  --vp-c-bg-soft: #11161f;
+  --vp-c-bg-elv: #0f141c;
+
+  --vp-c-text-1: #e6edf3;
+  --vp-c-text-2: #9aa7b5;
+  --vp-c-text-3: #5c6b7a;
+
+  --vp-c-divider: #1c2530;
+  --vp-c-border: #243040;
+  --vp-c-gutter: #05080d;
+
+  --vp-c-brand-1: #6ee7ff;     /* silicon cyan */
+  --vp-c-brand-2: #38bdf8;
+  --vp-c-brand-3: #22d3ee;
+  --vp-c-brand-soft: rgba(110, 231, 255, 0.12);
+
+  --silicon-accent: #c084fc;   /* purple */
+  --silicon-prompt: #4ade80;   /* prompt green */
+
+  --vp-code-block-bg: #0c1117;
+  --vp-code-color: #a5d6ff;
+  --vp-code-bg: rgba(110, 231, 255, 0.10);
+
+  --vp-home-hero-name-background: linear-gradient(120deg, #6ee7ff 20%, #c084fc);
+  --vp-home-hero-image-background-image: linear-gradient(135deg, rgba(110, 231, 255, 0.35), rgba(192, 132, 252, 0.35));
+}
+
+/* ---- Fixed grid background (the "oscilloscope" surface) ---- */
+.dark body {
+  background-color: var(--vp-c-bg);
+  background-image:
+    radial-gradient(900px 420px at 50% -160px, rgba(110, 231, 255, 0.08), transparent 70%),
+    linear-gradient(rgba(110, 231, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(110, 231, 255, 0.022) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 32px 32px;
+  background-attachment: fixed;
+}
+html:not(.dark) body {
+  background-image:
+    linear-gradient(rgba(2, 132, 199, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(2, 132, 199, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-attachment: fixed;
+}
+
+/* ---- Selection + scrollbar ---- */
+::selection {
+  background: rgba(110, 231, 255, 0.28);
+}
+.dark ::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+.dark ::-webkit-scrollbar-track {
+  background: var(--vp-c-bg);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #1e2935;
+  border: 2px solid var(--vp-c-bg);
+  border-radius: 6px;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #2a3a4a;
+}
+
+/* ---- Headings: cyan section anchors ---- */
+.vp-doc .header-anchor {
+  color: var(--vp-c-brand-1);
+}
+.vp-doc h2 {
+  letter-spacing: -0.01em;
+}
+
+/* ---- Inline code ---- */
+.vp-doc :not(pre) > code {
+  background: var(--vp-code-bg);
+  color: var(--vp-code-color);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 5px;
+  padding: 2px 6px;
+  font-size: 0.84em;
+}
+
+/* ---- Code blocks: terminal frame ---- */
+.vp-doc div[class*='language-'] {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+}
+.dark .vp-doc div[class*='language-'] {
+  box-shadow: inset 0 0 0 1px rgba(110, 231, 255, 0.03), 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+.vp-doc [class*='language-'] > span.lang {
+  font-family: var(--vp-font-family-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--vp-c-brand-1);
+  opacity: 0.85;
+}
+
+/* ---- Blockquotes (general aside) ---- */
+.vp-doc blockquote {
+  border-left: 3px solid var(--vp-c-brand-1);
+  border-radius: 0 8px 8px 0;
+  background: var(--vp-c-bg-soft);
+  padding: 14px 18px;
+  color: var(--vp-c-text-2);
+}
+.vp-doc blockquote > p {
+  margin: 0;
+}
+
+/* ---- Self-Test callout: REPL probe (tagged by markdown-it rule in config) ---- */
+.vp-doc blockquote.self-test {
+  position: relative;
+  padding-top: 34px;
+  border-left-color: var(--silicon-prompt);
+  background:
+    linear-gradient(rgba(74, 222, 128, 0.05), rgba(74, 222, 128, 0.05)),
+    var(--vp-c-bg-soft);
+}
+.vp-doc blockquote.self-test::before {
+  content: '// self-test';
+  position: absolute;
+  top: 9px;
+  left: 18px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--silicon-prompt);
+}
+
+/* ---- Tables: silicon grid ---- */
+.vp-doc th {
+  background: var(--vp-c-bg-soft);
+  color: var(--vp-c-brand-1);
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.vp-doc th,
+.vp-doc td {
+  border-color: var(--vp-c-divider);
+}
+.dark .vp-doc tbody tr:hover {
+  background: rgba(110, 231, 255, 0.03);
+}
+
+/* ---- Home: hero + feature cards ---- */
+.VPHero .name {
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.VPFeature {
+  background: var(--vp-c-bg-soft) !important;
+  border: 1px solid var(--vp-c-divider) !important;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.VPFeature:hover {
+  border-color: var(--vp-c-brand-1) !important;
+  transform: translateY(-2px);
+}
+.dark .VPFeature:hover {
+  box-shadow: 0 10px 30px rgba(110, 231, 255, 0.08);
+}
+
+/* ---- Nav: subtle glass on dark ---- */
+.dark .VPNavBar {
+  backdrop-filter: blur(8px);
+}

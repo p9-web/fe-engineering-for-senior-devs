@@ -1,0 +1,5 @@
+/* Geist for prose, JetBrains Mono for code — loaded via <link> in config.mts head. */
+:root {
+  --vp-font-family-base: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+}
