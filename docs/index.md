@@ -1,6 +1,7 @@
 ---
 # https://vitepress.dev/reference/default-theme-home-page
 layout: home
+description: "Execution-level frontend engineering for senior devs — how code runs from silicon to the screen: the event loop, the pixel pipeline, reactivity, compilers, the network, and WebAssembly."
 
 hero:
   name: "From Silicon to the Screen"
@@ -21,10 +22,10 @@ features:
     linkText: Start the foundation
   - title: Tier 2 · The Differentiators
     details: Reactivity engines read from the source, the data structures underneath them, compilers and ASTs, and the build systems that turn thousands of files into executable code. Where most senior devs never go.
-    link: /module-3-reactivity
+    link: /module-4-reactivity
     linkText: Go deeper
   - title: Tier 3 · Rare-Engineer Territory
     details: Build a reactive engine and a virtual scroller from scratch, wield the platform APIs that get work off the main thread, read the masters, and push past JavaScript into WebAssembly.
-    link: /module-6-build-things
+    link: /module-8-build-things
     linkText: Build the hard things
 ---

@@ -1,4 +1,44 @@
-# Module 3: Deep Reactivity Systems
+---
+title: "Module 4 · Deep Reactivity Systems"
+description: "How reactivity really works: Vue's Proxy track/trigger, fine-grained signals, the scheduler, virtual-DOM diffing, and compiler-driven reactivity — compared by cost."
+learn:
+  module: 4
+  level: advanced
+  timeRequired: PT50M
+  prerequisites:
+    - "Proxy & microtasks (module 1)"
+    - "closures"
+    - "basic framework experience (Vue/React)"
+  outcomes:
+    - "Explain how track/trigger build and invalidate the dependency map"
+    - "Compare signals, virtual DOM, and compiled reactivity by their cost model"
+    - "Reason about the diamond/glitch problem in derived state"
+  concepts:
+    - "Proxy-based reactivity (track/trigger/effect)"
+    - "ref vs reactive"
+    - "lazy & deep proxying"
+    - "dependency cleanup"
+    - "the scheduler & batching"
+    - "fine-grained signals"
+    - "computed (lazy + cached)"
+    - "the diamond / glitch problem"
+    - "virtual-DOM diffing"
+    - "keyed reconciliation"
+    - "compiler-driven reactivity"
+  misconceptions:
+    - "reactivity updates the DOM synchronously (Vue batches to a microtask)"
+    - "the virtual DOM recomputes the whole tree on every change"
+    - "compiled reactivity has zero runtime cost"
+  selfTests: 3
+  primarySources:
+    - "Vue 3 reactivity"
+    - "SolidJS signals"
+    - "React"
+    - "Svelte compiler"
+  teachingApproach: "Start from the dependency a getter must record, then build track/trigger up to a scheduler."
+---
+
+# Module 4: Deep Reactivity Systems
 
 Modern frontend frameworks abstract away manual DOM updates. They use reactivity systems to automatically propagate state changes to the UI. Understanding how these systems work under the hood separates framework users from framework architects.
 
@@ -9,7 +49,7 @@ Vue.js uses a Proxy-based reactivity engine. When you create a reactive object, 
 * **`trigger()`** — called from the `set` trap. Looks up the effects that depend on `(target, key)` and schedules them to re-run.
 * **`effect()`** — runs a function with itself installed as the *active effect*, so any reactive read during that run calls `track()` and subscribes it.
 
-The dependency store is a nested map (see Module 4 for why each layer is the structure it is):
+The dependency store is a nested map (see Module 5 for why each layer is the structure it is):
 
 ```js
 let activeEffect = null
@@ -61,7 +101,7 @@ function effect(fn, scheduler) {
 That ~25 lines *is* the core idea — and it's reentrant. Real Vue adds the parts that make it correct and fast:
 
 * **`ref` vs `reactive`:** `reactive()` proxies an object; `ref()` boxes any value in a `{ value }` object so primitives can be tracked too — that's why you write `.value`. Reactivity is **lazy and deep**: nested objects are only wrapped in a `Proxy` the first time you read them, so you don't pay to proxy a tree you never touch.
-* **Cleanup & re-tracking:** An effect's dependencies can change between runs (e.g. a `v-if` branch). Real Vue tracks which dep-sets an effect belongs to and *removes it from all of them* before each re-run, then re-collects fresh ones — otherwise a stale dependency would keep re-triggering a now-irrelevant effect. (Module 6 builds this cleanup step explicitly.)
+* **Cleanup & re-tracking:** An effect's dependencies can change between runs (e.g. a `v-if` branch). Real Vue tracks which dep-sets an effect belongs to and *removes it from all of them* before each re-run, then re-collects fresh ones — otherwise a stale dependency would keep re-triggering a now-irrelevant effect. (Module 8 builds this cleanup step explicitly.)
 * **Scheduling (batching):** Note that `trigger` calls `r.scheduler()` when present rather than re-running synchronously. Real Vue's scheduler pushes jobs into a queue flushed once on the next microtask (`nextTick`), de-duplicated — so mutating three properties in one tick re-renders **once**, not three times.
 
 > **Self-Test:**
@@ -132,7 +172,7 @@ React doesn't track individual property reads. When state changes, it **re-rende
 ## 4. Compiler-Driven Reactivity (Svelte / Vue Vapor)
 Svelte shifts reactivity work from the browser to the build step.
 
-* **AST transforms:** The compiler parses `.svelte` files into an AST (see Module 5).
+* **AST transforms:** The compiler parses `.svelte` files into an AST (see Module 6).
 * **Compile-time dependency analysis:** Instead of a runtime Proxy or VDOM, the compiler determines *at build time* which DOM updates each assignment triggers, and emits surgical instructions. There's no diff and no Proxy — just a direct write:
 
 ```svelte

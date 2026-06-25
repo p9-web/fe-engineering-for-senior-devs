@@ -1,4 +1,46 @@
-# Module 9: WebAssembly & The Future Runtime
+---
+title: "Module 10 · WebAssembly & the Future Runtime"
+description: "How WebAssembly executes: the typed stack machine, Liftoff/TurboFan tiers, linear memory, the JS↔Wasm boundary cost, WasmGC, and cross-origin isolation."
+learn:
+  module: 10
+  level: advanced
+  timeRequired: PT35M
+  prerequisites:
+    - "JIT tiers & the heap (module 1)"
+    - "streaming compilation (module 3)"
+    - "typed arrays / ArrayBuffer"
+  outcomes:
+    - "Explain why a chatty JS↔Wasm boundary can be slower than plain JS"
+    - "Reason about linear-memory growth detaching existing views"
+    - "Know when cross-origin isolation (COOP/COEP) is required"
+  concepts:
+    - "typed stack machine (no heap in the MVP)"
+    - "one-pass validation"
+    - "Module vs Instance"
+    - "imports / exports"
+    - "Liftoff (baseline) + TurboFan (optimizing)"
+    - "streaming compilation"
+    - "linear memory (ArrayBuffer)"
+    - "memory.grow detaching views"
+    - "WasmGC"
+    - "the JS↔Wasm boundary cost"
+    - "SharedArrayBuffer + atomics"
+    - "cross-origin isolation (COOP/COEP)"
+  misconceptions:
+    - "Wasm is AOT-compiled at install (it is still JIT'd Liftoff→TurboFan; speed comes from static types)"
+    - "strings cross the boundary for free (each call needs a UTF-8 encode + memcpy)"
+    - "Wasm always beats JS (frequent boundary crossing can lose to plain JS)"
+    - "Wasm has no GC (true of the MVP core, but WasmGC adds a host-managed heap)"
+  selfTests: 2
+  primarySources:
+    - "V8 (Liftoff / TurboFan)"
+    - "Emscripten"
+    - "wasm-bindgen"
+    - "WebAssembly spec"
+  teachingApproach: "Follow one function call across the JS↔Wasm boundary and account for every copy."
+---
+
+# Module 10: WebAssembly & The Future Runtime
 
 As browsers handle heavier workloads (video editing, 3D, heavy data processing), execution extends beyond JavaScript. WebAssembly (Wasm) is a binary instruction format designed as a portable compilation target for C, C++, Rust, and more.
 
@@ -25,7 +67,7 @@ Wasm still goes through a JIT in V8 — just a more predictable one than JavaScr
 * **Liftoff** — a baseline compiler that emits machine code in a single fast pass, so execution starts almost immediately. It exists precisely to kill startup latency: waiting for TurboFan to optimize every function up front would stall the first call, so Liftoff trades peak speed for an instant start.
 * **TurboFan** — the optimizing compiler recompiles hot functions in the background for peak speed.
 
-(This Liftoff→TurboFan tiering is V8-specific; SpiderMonkey and JavaScriptCore have their own.) Combined with **streaming compilation** (Module 8), a `.wasm` file compiles *while it downloads*. The reason Wasm reaches near-native throughput isn't that it's AOT-compiled — it's still JIT'd — but that its **static types and structured control flow mean no shape guards and no deoptimization**: the speculative bets that make JS fast-but-fragile (Module 1) simply don't exist here.
+(This Liftoff→TurboFan tiering is V8-specific; SpiderMonkey and JavaScriptCore have their own.) Combined with **streaming compilation** (Module 3), a `.wasm` file compiles *while it downloads*. The reason Wasm reaches near-native throughput isn't that it's AOT-compiled — it's still JIT'd — but that its **static types and structured control flow mean no shape guards and no deoptimization**: the speculative bets that make JS fast-but-fragile (Module 1) simply don't exist here.
 
 ## 3. The Memory Model
 Wasm doesn't allocate objects on a GC heap the way JS does.

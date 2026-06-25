@@ -1,4 +1,45 @@
-# Module 5: Code as Data (Compilers & ASTs)
+---
+title: "Module 6 · Compilers & ASTs (Code as Data)"
+description: "Code as data: lexing, parsing to ASTs, the visitor pattern, what tree shaking actually requires, template compilation with patch flags, and source maps."
+learn:
+  module: 6
+  level: advanced
+  timeRequired: PT35M
+  prerequisites:
+    - "how code runs (module 1)"
+    - "JS modules (ESM vs CJS)"
+    - "basic recursion"
+  outcomes:
+    - "Trace source from tokens to AST to generated code"
+    - "Explain the exact conditions tree shaking requires to drop code"
+    - "Read Vue's compiled output (patch flags, static hoisting)"
+  concepts:
+    - "lexing / tokenization"
+    - "parsing to an AST"
+    - "recursive descent & Pratt parsing"
+    - "the visitor pattern"
+    - "scope & binding"
+    - "tree shaking (ESM vs CJS)"
+    - "the sideEffects hint"
+    - "/*#__PURE__*/ annotations"
+    - "template compilation (patch flags, static hoisting, block tree)"
+    - "codegen"
+    - "source maps (VLQ encoding)"
+  misconceptions:
+    - "templates are magic (the compiler lexes {{ }} and emits render-function calls)"
+    - "tree shaking is automatic (it needs ESM + sideEffects + no CJS interop)"
+    - "pure annotations let you delete any code (only unused call results; side effects in args remain)"
+  selfTests: 3
+  primarySources:
+    - "Babel"
+    - "esbuild"
+    - "SWC"
+    - "acorn"
+    - "Vue compiler"
+  teachingApproach: "Treat the parser as a function from text to a tree, then transform the tree to make the lesson concrete."
+---
+
+# Module 6: Code as Data (Compilers & ASTs)
 
 Most frontend developers treat Babel, Vite, esbuild, and the Vue/Svelte compilers as black boxes. To understand how your code becomes execution, you must understand compilers — and the central idea that **code is just data you can restructure.**
 
@@ -53,4 +94,4 @@ This is the throughline of Modules 3–5: **the more the compiler knows statical
 ## 5. Code Generation & Source Maps
 * **Codegen:** Walk the final AST and print it back to a string — the executable JS shipped to the browser.
 * **Source maps:** Because the shipped code barely resembles your source, the compiler emits a `.map` file. Its `mappings` field is **not** absolute coordinates — it's a string of **VLQ-encoded relative deltas**: segments separated by `,`, generated lines by `;`, and each segment encodes the *change since the previous segment* in (generated column, source index, original line, original column, name index). One non-obvious detail: the **generated-column field resets to 0 at each new line** (`;`), while the other four fields delta **continuously across the entire file**. Delta encoding is exactly why the file stays small. DevTools sums the deltas to recover real positions and show your source on a breakpoint.
-* **Why esbuild/SWC are fast:** written in Go/Rust, they parallelize across cores and do the whole pipeline in as few AST passes as possible — versus JS-based toolchains that re-traverse the tree many times. (More on judging this in Module 7.)
+* **Why esbuild/SWC are fast:** written in Go/Rust, they parallelize across cores and do the whole pipeline in as few AST passes as possible — versus JS-based toolchains that re-traverse the tree many times. (More on judging this in Module 9.)
