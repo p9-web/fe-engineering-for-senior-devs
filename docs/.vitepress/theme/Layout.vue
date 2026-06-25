@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import DefaultTheme from 'vitepress/theme-without-fonts'
 import StudyGuide from './StudyGuide.vue'
+import { icon } from '../icons'
 
 const { Layout } = DefaultTheme
 </script>
@@ -13,13 +14,15 @@ const { Layout } = DefaultTheme
     </template>
     <!-- terminal status line at the foot of every doc page -->
     <template #doc-footer-before>
-      <div class="terminal-status">from silicon to the screen</div>
+      <div class="terminal-status"><span class="lic" v-html="icon('terminal', 13)" />from silicon to the screen</div>
     </template>
   </Layout>
 </template>
 
 <style>
 .terminal-status {
+  display: flex;
+  align-items: center;
   margin-top: 8px;
   padding-top: 14px;
   border-top: 1px dashed var(--vp-c-divider);
@@ -28,8 +31,7 @@ const { Layout } = DefaultTheme
   letter-spacing: 0.04em;
   color: var(--vp-c-text-3);
 }
-.terminal-status::before {
-  content: '$ ';
+.terminal-status .lic {
   color: var(--silicon-prompt);
 }
 .terminal-status::after {
