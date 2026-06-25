@@ -3,6 +3,11 @@ import { computed } from 'vue'
 import { useData } from 'vitepress'
 import { icon } from '../icons'
 
+// icon + heading as one v-html string. Calling a function (vs an inline `icon() + text`
+// concat) also sidesteps esbuild's bogus "?? always returns the left operand" warning on
+// the markup Vue generates for v-html.
+const label = (name: string, size: number, text: string = '') => icon(name, size) + text
+
 // Mirrors the `learn:` frontmatter block (see .vitepress/config.mts). Renders only when present.
 type Learn = {
   level: string
@@ -32,38 +37,38 @@ const duration = computed(() => (learn.value ? fmtDuration(learn.value.timeRequi
 <template>
   <details v-if="learn" class="study-guide" open>
     <summary>
-      <span class="sg-label" v-html="icon('compass', 13) + '// how to study this module'" />
+      <span class="sg-label" v-html="label('compass', 13, '// how to study this module')" />
       <span class="sg-meta">
-        <span class="sg-tag" v-html="icon('bar-chart-3', 12) + learn.level" />
-        <span class="sg-tag" v-html="icon('clock', 12) + duration" />
-        <span class="sg-tag" v-html="icon('flask-conical', 12) + learn.selfTests + ' self-tests'" />
+        <span class="sg-tag" v-html="label('bar-chart-3', 12, learn.level)" />
+        <span class="sg-tag" v-html="label('clock', 12, duration)" />
+        <span class="sg-tag" v-html="label('flask-conical', 12, learn.selfTests + ' self-tests')" />
       </span>
     </summary>
 
     <div class="sg-body">
       <section v-if="learn.prerequisites?.length" class="sg-section">
-        <h4 v-html="icon('book-marked', 13) + 'Assumed knowledge'" />
+        <h4 v-html="label('book-marked', 13, 'Assumed knowledge')" />
         <ul class="sg-chips">
           <li v-for="p in learn.prerequisites" :key="p">{{ p }}</li>
         </ul>
       </section>
 
       <section v-if="learn.outcomes?.length" class="sg-section">
-        <h4 v-html="icon('target', 13) + `You'll be able to`" />
+        <h4 v-html="label('target', 13, `You'll be able to`)" />
         <ul class="sg-list">
           <li v-for="o in learn.outcomes" :key="o">{{ o }}</li>
         </ul>
       </section>
 
       <section v-if="learn.misconceptions?.length" class="sg-section sg-warn">
-        <h4 v-html="icon('triangle-alert', 13) + 'Watch out — common wrong models'" />
+        <h4 v-html="label('triangle-alert', 13, 'Watch out — common wrong models')" />
         <ul class="sg-list">
           <li v-for="m in learn.misconceptions" :key="m">{{ m }}</li>
         </ul>
       </section>
 
       <section v-if="learn.primarySources?.length" class="sg-section">
-        <h4 v-html="icon('book-open', 13) + 'Grounded in source'" />
+        <h4 v-html="label('book-open', 13, 'Grounded in source')" />
         <ul class="sg-chips">
           <li v-for="s in learn.primarySources" :key="s">{{ s }}</li>
         </ul>
