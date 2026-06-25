@@ -50,7 +50,7 @@ Rendering 100,000 rows crashes the browser. A virtual scroller renders only what
   // offset the rendered slice by start * rowHeight
   ```
   Clamping matters: an unclamped `end` renders phantom rows past the data, and an unclamped `start` renders negative indices at the top.
-* **DOM recycling:** Don't create/destroy nodes as you scroll — keep a fixed pool and reposition it with `transform: translateY(...)` (a compositor-only move; see Module 2).
+* **DOM recycling:** Don't create/destroy nodes as you scroll — keep a fixed pool and reposition it with [`transform: translateY(...)`](https://developer.mozilla.org/en-US/docs/Web/CSS/transform) (a compositor-only move; see Module 2).
 * **The brick wall — variable heights:** The instant rows differ in height you can't compute `first` by division. You need a **measurement cache** of actual heights, an *estimated* height for unmeasured rows, and a **scroll-anchoring** step that corrects `scrollTop` after a measured row turns out taller/shorter than estimated — or the list jumps under the user's finger.
 
 > **Self-Test:**
@@ -107,8 +107,8 @@ Combine your reactive engine with DOM updates to render a `<Counter />`.
 Build a global store like Pinia or Redux.
 
 * **Subscriptions:** Components across the tree subscribe to slices of external state.
-* **Persistence:** Hydrate initial state from (and write changes back to) `localStorage`/`IndexedDB` — the wall here is *when* to serialize (debounced, not every mutation) and how to avoid persisting derived/transient fields.
-* **The brick wall — batching:** A handler that mutates three fields synchronously must re-render **once**. Queue invalidated subscribers in a `Set` (auto-dedup) and flush on the next microtask (`queueMicrotask`) — the same scheduler pattern Vue uses for `nextTick` (Module 5).
+* **Persistence:** Hydrate initial state from (and write changes back to) [`localStorage`](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage)/[`IndexedDB`](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API) — the wall here is *when* to serialize (debounced, not every mutation) and how to avoid persisting derived/transient fields.
+* **The brick wall — batching:** A handler that mutates three fields synchronously must re-render **once**. Queue invalidated subscribers in a `Set` (auto-dedup) and flush on the next microtask ([`queueMicrotask`](https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask)) — the same scheduler pattern Vue uses for [`nextTick`](https://vuejs.org/api/general.html#nexttick) (Module 5).
 
 ```js
 const dirty = new Set(); let scheduled = false
@@ -129,12 +129,12 @@ function flush() {
 > A click handler does `count++; count++; count++`. With the batching above, how many times does a subscriber run, and on which turn of the event loop? (Once, on the next microtask — the `Set` dedups the three invalidations of the same subscriber.)
 
 ## 5. A Simplified Bundler (Like Vite Dev)
-Browsers support ES modules (`<script type="module">`) but choke on bare imports like `import React from 'react'`.
+Browsers support ES modules ([`<script type="module">`](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/script/type#module)) but choke on [bare imports](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/script/type/importmap) like `import React from 'react'`.
 
 * **Module resolution:** Run a local server that intercepts requests for `.js`, parses each file to find its imports (Module 7), and **rewrites** bare specifiers to real URLs (`'react'` → `/@modules/react`), serving the resolved file from `node_modules`.
-* **The brick wall — the dependency graph & HMR:** To support hot updates you must track *who imports whom*. When a file changes you walk that graph to find the smallest set of modules to re-send, and push an invalidation over a WebSocket (Module 4) — instead of reloading the page. Building the graph is the real work; rewriting imports is the easy part.
+* **The brick wall — the dependency graph & HMR:** To support hot updates you must track *who imports whom*. When a file changes you walk that graph to find the smallest set of modules to re-send, and [push an invalidation over a WebSocket](https://vite.dev/guide/api-hmr.html) (Module 4) — instead of reloading the page. Building the graph is the real work; rewriting imports is the easy part.
 
 > **Self-Test:**
-> File `b.js` is imported by `a.js` and `c.js`. You edit `b.js`. Why does HMR need the *reverse* edges (importers), not the forward ones (imports), to know which modules to invalidate — and what stops the invalidation from cascading to the whole graph? *(You walk importers upward to find who's affected; the cascade stops at the first module that declares an HMR boundary — `import.meta.hot.accept()` — which says "I can swap my dependency in place, don't propagate past me." With no accepting boundary, it bubbles to the root and falls back to a full reload.)*
+> File `b.js` is imported by `a.js` and `c.js`. You edit `b.js`. Why does HMR need the *reverse* edges (importers), not the forward ones (imports), to know which modules to invalidate — and what stops the invalidation from cascading to the whole graph? *(You walk importers upward to find who's affected; the cascade stops at the first module that declares an HMR boundary — [`import.meta.hot.accept()`](https://vite.dev/guide/api-hmr.html#hot-accept-cb) — which says "I can swap my dependency in place, don't propagate past me." With no accepting boundary, it bubbles to the root and falls back to a full reload.)*
 
 > **Cross-project synthesis:** The same two patterns recur in all five: a **pool/cache to avoid re-creating expensive things** (DOM nodes, computed values, parsed modules) and a **microtask-batched flush to coalesce work** (renders, store updates). Spotting them is the point of building these.

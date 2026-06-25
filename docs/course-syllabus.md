@@ -28,7 +28,7 @@ You must understand the exact scheduling order of macrotasks, microtasks, and th
 
 | Concept | Key Focus Areas | Practical Implication |
 | :--- | :--- | :--- |
-| **Concurrency** | Microtask vs. Macrotask queues, Starvation scenarios | Predicting exact execution order of promises and timeouts. |
+| **Concurrency** | [Microtask vs. Macrotask queues](https://html.spec.whatwg.org/multipage/webappapis.html#event-loops), Starvation scenarios | Predicting exact execution order of promises and timeouts. |
 | **Memory** | Stack vs. Heap, Garbage collection, Retainers | Identifying accidental memory leaks and detached DOM nodes. |
 
 > **Self-Test:**
@@ -43,23 +43,23 @@ You must understand the exact scheduling order of macrotasks, microtasks, and th
 > *Why does it print in exactly that order? Why do closures leak memory?*
 
 **JavaScript Engine Internals (V8)**
-You will study hidden classes, inline caching, deoptimization, and JIT compilation. You must understand why changing object shapes dynamically hurts performance through monomorphic vs. polymorphic call sites.
+You will study [hidden classes, inline caching](https://v8.dev/blog/fast-properties), deoptimization, and JIT compilation. You must understand why changing object shapes dynamically hurts performance through monomorphic vs. polymorphic call sites.
 
 **The Prototype System**
-Frameworks rely heavily on prototype chain lookups, property resolution, descriptors, and Proxy behavior. You will study how Vue.js utilizes Proxy interception for its reactivity system.
+Frameworks rely heavily on prototype chain lookups, property resolution, descriptors, and Proxy behavior. You will study how Vue.js utilizes [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) interception for its reactivity system.
 
 ### Module 2: Understand the Browser Like an Operating System
 To write high-performance applications, you must know what the browser is doing every millisecond.
 
 **The Rendering Pipeline & GPU Compositing**
-This covers DOM/CSSOM construction, layout calculations, painting, and compositing. You will learn the difference between repaints, reflows, and hardware acceleration.
+This covers [DOM/CSSOM construction, layout calculations, painting, and compositing](https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/Critical_rendering_path). You will learn the difference between repaints, reflows, and hardware acceleration.
 
 > **Self-Test:**
 > Why is `element.style.width = "100px"; console.log(element.offsetWidth)` expensive? (Understand Layout Thrashing).
 > Why is `transform: translateX(...)` fast, but `left: 100px` slow?
 
 **Scheduling**
-You will study frame budgets (the critical 16.67ms window), main thread contention, and APIs like `requestAnimationFrame` and `requestIdleCallback`. Profiling and fixing these costs in DevTools is the subject of Module 3.
+You will study frame budgets (the critical 16.67ms window), main thread contention, and APIs like [`requestAnimationFrame`](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame) and [`requestIdleCallback`](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback). Profiling and fixing these costs in DevTools is the subject of Module 3.
 
 ### Module 3: Performance Engineering
 Module 2 taught *why* rendering costs what it does; this module is the discipline of *measuring and fixing* it. The rule is absolute: never optimize without a before-and-after trace.
@@ -67,14 +67,14 @@ Module 2 taught *why* rendering costs what it does; this module is the disciplin
 * **Reading a Flame Chart:** Separate scripting, rendering, and paint; find the long task (>50ms) that blocks input.
 * **Forced Reflow in the Trace:** Spot synchronous layout triggered mid-task, and fix it by batching DOM reads before writes.
 * **Memory:** Heap snapshots, the three-snapshot technique, detached DOM nodes, and reading the retainer path to a leak.
-* **Responsiveness:** Interaction to Next Paint (INP), breaking up long tasks (`scheduler.postTask`, yielding), and deciding from the trace when to move work off the main thread.
+* **Responsiveness:** [Interaction to Next Paint (INP)](https://developer.mozilla.org/en-US/docs/Glossary/Interaction_to_next_paint), breaking up long tasks ([`scheduler.postTask`](https://developer.mozilla.org/en-US/docs/Web/API/Scheduler/postTask), yielding), and deciding from the trace when to move work off the main thread.
 
 ### Module 4: The Network & Execution Bridge
 Code execution relies heavily on how assets are delivered and cached.
 
-* **Delivery Protocols:** Understand multiplexing in HTTP/2 and UDP-based routing in HTTP/3.
-* **Service Workers:** Master the browser's programmable network proxy for offline execution and cache invalidation.
-* **Real-Time Execution:** Compare connection overhead between WebSockets, Server-Sent Events, and WebRTC.
+* **Delivery Protocols:** Understand [multiplexing in HTTP/2](https://www.rfc-editor.org/rfc/rfc9113.html) and UDP-based routing in HTTP/3.
+* **[Service Workers](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API):** Master the browser's programmable network proxy for offline execution and cache invalidation.
+* **Real-Time Execution:** Compare connection overhead between WebSockets, [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events), and WebRTC.
 
 ---
 
@@ -84,7 +84,7 @@ This is where your market value rises sharply. Most senior frontend devs never l
 ### Module 5: Deep Reactivity Systems
 This module breaks down how modern frameworks propagate state.
 
-* **Vue Reactivity:** Study the source code for `track()`, `trigger()`, `effect()`, and dependency maps.
+* **Vue Reactivity:** Study the source code for [`track()`](https://vuejs.org/guide/extras/reactivity-in-depth.html), `trigger()`, `effect()`, and dependency maps.
 * **Signals:** Analyze dependency graphs, fine-grained subscriptions, and invalidation propagation (reference: SolidJS).
 * **Virtual DOM:** Master tree diffing, reconciliation heuristics, keyed updates, and patch algorithms (reference: React internals).
 * **Compiler-Driven Reactivity:** Understand AST transforms and compile-time dependency analysis (reference: Svelte).
@@ -95,7 +95,7 @@ We bypass theoretical interview questions to focus strictly on why frameworks ut
 | Structure | Framework Application | Example Use Case |
 | :--- | :--- | :--- |
 | **Trees** | Virtual DOM representations | Traversal and diffing of UI nodes. |
-| **WeakMaps** | Dependency tracking | `WeakMap<object, Map<string, Set<Effect>>>` (Vue internals). |
+| **[WeakMaps](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakMap)** | Dependency tracking | `WeakMap<object, Map<string, Set<Effect>>>` (Vue internals). |
 | **Linked Lists** | Scheduler queues | Managing rendering tasks efficiently. |
 | **Graphs** | Dependency propagation | Mapping relationships between reactive state. |
 
@@ -113,8 +113,8 @@ This is where you bridge the gap between authoring code and executing it.
 The compiler turns one file into executable code; the build system orchestrates *thousands* of them — twice, with opposite strategies for dev and production.
 
 * **Module Resolution:** Bare specifiers, the `exports` field, ESM vs. CommonJS, and why the browser can’t resolve `import 'vue'` on its own.
-* **The Dev Server:** Vite’s native-ESM, transform-on-demand model; esbuild dependency pre-bundling (`optimizeDeps`); why dev startup is O(1) in app size.
-* **HMR:** The module graph, accept boundaries (`import.meta.hot`), and why component state survives an edit.
+* **The Dev Server:** Vite’s native-ESM, transform-on-demand model; esbuild dependency pre-bundling ([`optimizeDeps`](https://vite.dev/guide/dep-pre-bundling.html)); why dev startup is O(1) in app size.
+* **HMR:** The module graph, accept boundaries ([`import.meta.hot`](https://vite.dev/guide/api-hmr.html)), and why component state survives an edit.
 * **Production Build:** Rollup, code splitting, tree shaking, and the dev/prod two-engine consistency tradeoff (and Rolldown’s push to unify them).
 
 ---
@@ -134,9 +134,9 @@ True mastery requires implementation. You will build simplified versions of comp
 ### Module 10: Browser APIs as Architecture
 A set of platform APIs that all answer the same two questions: *observe without polling*, and *get work off the one main thread*. Knowing why each exists lets you pick the right one before profiling proves the naïve version wrong.
 
-* **The Observer Family:** `MutationObserver`, `ResizeObserver`, `IntersectionObserver` — delivery timing and why they replace scroll/timer polling.
+* **The Observer Family:** `MutationObserver`, `ResizeObserver`, [`IntersectionObserver`](https://developer.mozilla.org/en-US/docs/Web/API/IntersectionObserver) — delivery timing and why they replace scroll/timer polling.
 * **Web Workers:** A second thread, structured-clone cost, and transferables for zero-copy handoff.
-* **SharedArrayBuffer & Atomics:** True shared memory, the cross-origin-isolation requirement, and race-free coordination.
+* **[SharedArrayBuffer](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer) & Atomics:** True shared memory, the cross-origin-isolation requirement, and race-free coordination.
 * **OffscreenCanvas:** Rendering decoupled from the DOM and driven from a worker.
 
 ### Module 11: Source Code Reading & Technical Judgment
