@@ -46,6 +46,19 @@ Most frontend developers treat Babel, Vite, esbuild, and the Vue/Svelte compiler
 ## 1. Parsing: From Text to Trees
 Your JavaScript or template is a giant string. Turning it into something executable happens in two stages.
 
+*Source becomes tokens, tokens become a tree, the tree is transformed, then code is regenerated — compilation as data transformation.*
+
+```mermaid
+flowchart LR
+    Src["Source<br/>let x = 5"] --> Lex["Lexer"]
+    Lex --> Tok["Tokens<br/>[let] [x] [=] [5]"]
+    Tok --> Parse["Parser<br/>(Pratt precedence)"]
+    Parse --> AST["AST<br/>VariableDeclaration<br/>→ id: Identifier 'x'<br/>→ init: Literal 5"]
+    AST --> Trans["Transform<br/>(visitor pattern)"]
+    Trans --> Gen["Codegen"]
+    Gen --> Out["Output JS"]
+```
+
 * **Lexing (tokenization):** Scan characters into tokens — `Keyword(let)`, `Identifier(x)`, `Punctuator(=)`, `Numeric(5)`. This throws away whitespace and comments and yields a flat stream.
 * **Parsing:** Arrange tokens into an **[Abstract Syntax Tree](https://github.com/estree/estree)** per the language grammar. `let x = 5` becomes (a *simplified* [ESTree](https://github.com/estree/estree/blob/master/es5.md) shape — real nodes from [acorn](https://github.com/acornjs/acorn)/espree also carry `start`/`end`/`loc`, wrapped in a top-level `Program` node):
 
@@ -85,6 +98,19 @@ A framework compiler can do far more than emit a render function — it can enco
 * **Patch flags:** When Vue compiles `<div :id="x">static</div>`, it tags the vnode with a bitmask (e.g. `PROPS`) saying "only the `id` can change." At runtime the diff **skips** the static children entirely and patches just the dynamic binding — turning a tree walk into a targeted update.
 * **Static hoisting:** Nodes with no dynamic bindings are created **once**, outside the render function, and reused every render instead of being recreated.
 * **Block tree:** The generated render function wraps the root in [`(openBlock(), createElementBlock(...))`](https://vuejs.org/guide/extras/rendering-mechanism.html#compiler-informed-virtual-dom); the block collects its dynamic descendants into a flat `dynamicChildren` array, so diffing iterates a short list of things-that-can-change instead of recursing the whole subtree. Structural directives (`v-if`, `v-for`) open **nested blocks**, because they're the boundaries where the set of dynamic nodes can change shape — so each becomes its own independently-tracked block. (Anchor these claims in real Vue source: `openBlock`, `createElementBlock`, and the `PatchFlags` enum in `@vue/runtime-core` / `@vue/shared`.)
+
+*Compile-time analysis shrinks runtime patching from the whole subtree down to just the dynamic bindings.*
+
+```mermaid
+flowchart TD
+    Tpl["Template<br/>&lt;div :id=x&gt; static text"] --> Comp["Compiler analysis"]
+    Comp --> F1["Patch flag: PROPS<br/>(only :id is dynamic)"]
+    Comp --> F2["Static hoisting<br/>(static vnode created once)"]
+    Comp --> F3["Block tree<br/>(track only dynamic descendants)"]
+    F1 --> Run["Runtime patch cost:<br/>O(dynamic bindings), not O(subtree)"]
+    F2 --> Run
+    F3 --> Run
+```
 
 This is the throughline of Modules 3–5: **the more the compiler knows statically, the less the runtime has to do.**
 

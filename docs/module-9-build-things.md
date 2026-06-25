@@ -56,6 +56,17 @@ Rendering 100,000 rows crashes the browser. A virtual scroller renders only what
 > **Self-Test:**
 > With fixed heights the spacer is `totalCount * rowHeight`. With variable heights, what replaces that single multiply? You build a *prefix-sum* (cumulative offset) array: reading row N's offset is then O(1), but finding *which* row sits at a given `scrollTop` becomes a **binary search** over that array — O(log n), not the O(1) division you had with fixed heights. Naming both costs is the point.
 
+*Fixed rows are O(1) division; variable rows need a prefix-sum plus binary search to find the first visible row in O(log n).*
+
+```mermaid
+flowchart TD
+    Q{"Row heights?"} -->|"fixed"| Fix["index = scrollTop / rowHeight<br/>O(1)"]
+    Q -->|"variable"| Pre["Prefix-sum of heights<br/>[0, 40, 100, 140]"]
+    Pre --> Search["Binary search for scrollTop<br/>O(log n)"]
+    Search --> Found["First visible row"]
+    Found --> Est["Unmeasured rows use estimate;<br/>scroll-anchoring corrects drift"]
+```
+
 ## 2. A Custom Reactive Engine
 Rebuild the core of Module 5 yourself — including the two things that make it actually correct: reentrancy and cleanup.
 
@@ -87,6 +98,23 @@ function effect(fn) {
   e.run()
   return e
 }
+```
+
+*Saving and restoring the active effect around a nested run keeps the outer effect's tracking context intact.*
+
+```mermaid
+sequenceDiagram
+    participant Stack as activeEffect
+    participant A as Effect A
+    participant B as Effect B (nested)
+    A->>Stack: save prev, set active = A
+    A->>A: run, read triggers B
+    B->>Stack: save prev (= A), set active = B
+    B->>B: run to completion
+    B->>Stack: restore active = A
+    A->>A: continue (still tracking to A)
+    A->>Stack: restore active = prev
+    Note over Stack: nesting can't clobber A's context
 ```
 
 * **`computed(fn)`:** Derived signal that caches and only recomputes when a dependency changed — implement the `dirty` flag + scheduler from Module 5.

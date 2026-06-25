@@ -45,6 +45,24 @@ Most developers know `setTimeout`, but few understand the exact scheduling order
 * **Macrotasks (tasks):** Things like `setTimeout`, `setInterval`, I/O, and message events. The engine picks *one* task from the queue, runs it to completion, then drains the microtask queue.
 * **Microtasks:** `Promise.then/catch/finally`, [`queueMicrotask`](https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask), and `MutationObserver` callbacks.
 * **The Rule:** After every task (including the initial script), the engine [empties the *entire* microtask queue before the next task](https://html.spec.whatwg.org/multipage/webappapis.html#event-loop-processing-model).
+
+*The event loop: one macrotask, then the entire microtask queue drains, then maybe a paint — only then the next task.*
+
+```mermaid
+sequenceDiagram
+    participant EL as Event Loop
+    participant Macro as Macrotask Queue
+    participant Micro as Microtask Queue
+    participant Render as Render Step
+    EL->>Macro: Dequeue ONE task
+    Macro-->>EL: Run it to completion
+    EL->>Micro: Drain the ENTIRE queue
+    Micro-->>EL: All microtasks done (incl. ones queued during drain)
+    EL->>Render: Maybe paint (style, layout, composite)
+    Render-->>EL: Frame done
+    Note over EL: Only now: next macrotask
+```
+
 * **Where rendering fits:** Rendering is **not** a task you dequeue. It's a separate ["update the rendering"](https://html.spec.whatwg.org/multipage/webappapis.html#event-loops) step the browser may run *between* tasks (covered in Module 2). So the real cycle is: run a task → drain microtasks → maybe render → next task.
 
 ### Promise Queue Semantics & Starvation
@@ -134,10 +152,36 @@ JavaScript engines don't simply "interpret" or "compile" — they do both, in ti
 
 Code that runs often gets promoted; if TurboFan's speculative assumptions are later violated, the function is **deoptimized** back down to Ignition bytecode (and can be re-optimized later via on-stack replacement once it stabilizes).
 
+*Hot code climbs the tiers; a broken speculation deoptimizes it straight back to bytecode.*
+
+```mermaid
+flowchart TD
+    Source["Source code"] -->|parse to bytecode| Ignition["Ignition (interpreter)"]
+    Ignition -->|warm: called often| Sparkplug["Sparkplug (baseline JIT)"]
+    Sparkplug -->|hot| Maglev["Maglev (mid-tier JIT)"]
+    Maglev -->|very hot + stable feedback| TurboFan["TurboFan (optimizing JIT)"]
+    TurboFan -->|speculation violated| Deopt["Deoptimize"]
+    Deopt -->|fall back to bytecode| Ignition
+```
+
+
 ### Hidden Classes & Inline Caching
 * **[Hidden Classes (Shapes/Maps)](https://v8.dev/blog/fast-properties):** V8 creates internal "shapes" for objects to optimize property access. If `objA` and `objB` have the same properties added in the *exact same order*, they share a hidden class — and code that touches them stays fast.
 * **[Inline Caching (IC)](https://v8.dev/docs/hidden-classes):** At each property-access site, the engine caches *where* the property lives for the shapes it has seen. Same shape every time (**monomorphic**) → near-direct memory access. A handful of shapes → **polymorphic**. Many shapes → **megamorphic** → fall back to a slow dictionary lookup.
 * **Deoptimization:** Dynamically adding/deleting properties, or initializing object fields in different orders, mints new shapes, busts the IC, and can force V8 to bail TurboFan's optimized code. The practical rule: **initialize all fields in the constructor, in a consistent order, and don't `delete`.**
+
+*Stable object shapes keep a call site monomorphic — the fast path; shape variety degrades it toward a dictionary lookup.*
+
+```mermaid
+flowchart LR
+    Site["Property access site"] --> Q{"How many object<br/>shapes seen here?"}
+    Q -->|one| Mono["Monomorphic<br/>inline cache — fastest"]
+    Q -->|a few| Poly["Polymorphic<br/>checks each shape"]
+    Q -->|many| Mega["Megamorphic<br/>slow dictionary lookup"]
+    Mono --> Fast["~direct memory offset"]
+    Poly --> Slow["slow path"]
+    Mega --> Slow
+```
 
 > **Self-Test:**
 > Without reading ahead, predict which loop produces faster property reads *downstream*, and explain why in terms of hidden classes:

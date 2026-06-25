@@ -45,6 +45,18 @@ The DOM is hierarchical, so any Virtual DOM representation is a tree. Each node 
 * **Why O(n) not O(n³):** General tree-edit distance is O(n³). Frameworks cheat with heuristics — same position + same type = reuse; `key` identifies stable children — to get linear diffing fast enough for 60 FPS (the type-change failure mode is in Module 5).
 * **The actual algorithm (Vue):** Vue's [`patchKeyedChildren`](https://github.com/vuejs/core/blob/main/packages/runtime-core/src/renderer.ts) first runs cheap **two-ended fast paths** — syncing matching nodes inward from the start and from the end — which handles the common append/prepend/replace cases in O(n). Only for the *unknown middle* that's left does it compute the **Longest Increasing Subsequence** of the nodes that kept their relative order, and move only the nodes *not* in that subsequence. The LIS step is real O(n log n) (patience sorting), lifted straight from `runtime-core`, and it minimizes DOM moves — the most expensive operation.
 
+*Trim the matching ends, then move only the nodes outside the longest increasing subsequence — the minimum DOM moves.*
+
+```mermaid
+flowchart TD
+    In["Old: [A B C D]<br/>New: [D A B C]"] --> P1["Phase 1: sync from both ends<br/>(skip unchanged prefix/suffix)"]
+    P1 --> Mid["Unknown middle remains"]
+    Mid --> P2["Phase 2: longest increasing<br/>subsequence of kept nodes"]
+    P2 --> LIS["LIS = [A B C] — already in order"]
+    LIS --> P3["Phase 3: move only nodes NOT in LIS"]
+    P3 --> Out["Move D only → 1 DOM move"]
+```
+
 > **Self-Test:**
 > A list reorders from `[A B C D]` to `[D A B C]`. A naive keyed diff moves three nodes. Why does an LIS-based diff move only **one** (`D`), and what is the "increasing subsequence" here? (`A B C` keep their relative order — that's the LIS — so only `D` is relocated.)
 

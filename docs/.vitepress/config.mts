@@ -225,6 +225,18 @@ export default defineConfig({
           }
         }
       })
+
+      // Render ```mermaid fences as the client-side <Mermaid> component (see theme/Mermaid.vue).
+      // Source is encodeURIComponent'd so it survives the HTML attribute + Vue template compile.
+      const defaultFence =
+        md.renderer.rules.fence ??
+        ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+      md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+        if (tokens[idx].info.trim().toLowerCase() === 'mermaid') {
+          return `<Mermaid code="${encodeURIComponent(tokens[idx].content)}"></Mermaid>`
+        }
+        return defaultFence(tokens, idx, options, env, self)
+      }
     },
   },
   themeConfig: {

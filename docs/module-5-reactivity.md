@@ -104,6 +104,19 @@ That ~25 lines *is* the core idea — and it's reentrant. Real Vue adds the part
 * **Cleanup & re-tracking:** An effect's dependencies can change between runs (e.g. a `v-if` branch). Real Vue tracks which dep-sets an effect belongs to and *removes it from all of them* before each re-run, then re-collects fresh ones — otherwise a stale dependency would keep re-triggering a now-irrelevant effect. (Module 9 builds this cleanup step explicitly.)
 * **Scheduling (batching):** Note that `trigger` calls `r.scheduler()` when present rather than re-running synchronously. Real Vue's scheduler pushes jobs into a queue flushed once on the next microtask ([`nextTick`](https://vuejs.org/api/general.html#nexttick)), de-duplicated — so mutating three properties in one tick re-renders **once**, not three times.
 
+*Reads record the running effect; writes look those effects up and reschedule them — the entire reactivity contract.*
+
+```mermaid
+flowchart LR
+    Read["Reactive read<br/>get(obj, 'x')"] -->|inside an effect?| Track["track(): record dep"]
+    Track --> Map["targetMap:<br/>obj → key → Set of effects"]
+    Write["Reactive write<br/>set(obj, 'x', v)"] --> Trigger["trigger(): look up deps"]
+    Trigger --> Map
+    Map --> Sched["schedule subscribed effects"]
+    Sched --> Rerun["re-run effect"]
+    Rerun -.->|new reads re-track| Track
+```
+
 > **Self-Test:**
 > The `effect` above saves and restores `activeEffect`. Trace what would break if it used `activeEffect = null` instead, given `effect(() => { state.a; effect(() => state.b); state.c })`. *(The inner effect resets the active effect to null on exit, so `state.c` is read with no active effect — the outer effect never subscribes to `c` and silently stops updating.)*
 
@@ -160,6 +173,18 @@ A ──┤      ├─→ D
 
 Propagate depth-first and `A→B→D` runs `D` with the new `B` but the *old* `C`; then `A→C→D` runs it again — the first run was the glitch. Solutions: make computeds **lazy** (pull on read, with the `dirty` flag above) and/or propagate in **topological order** so `D` only recomputes after *both* `B` and `C` are settled — exactly once, never with a stale input.
 
+*A diamond dependency makes naive propagation run the sink twice with a stale input; lazy or topological evaluation runs it once.*
+
+```mermaid
+flowchart TD
+    A["A (source)"] --> B["B = f(A)"]
+    A --> C["C = g(A)"]
+    B --> D["D = h(B, C)"]
+    C --> D
+    D -.->|"naive depth-first:<br/>A→B→D sees stale C, then A→C→D"| Glitch["GLITCH: D runs twice,<br/>once with stale input"]
+    D -.->|"lazy computed (dirty flag) or<br/>topological push"| Fixed["CORRECT: D runs once,<br/>after B and C settle"]
+```
+
 ## 3. The Virtual DOM (React)
 React doesn't track individual property reads. When state changes, it **re-renders** the component (and, by default, its children) into a new VDOM tree, then diffs.
 
@@ -167,6 +192,18 @@ React doesn't track individual property reads. When state changes, it **re-rende
 * **Tree diffing:** Comparing two arbitrary trees is **O(n³)** (general tree-edit distance: each node in one tree can map to any node in the other, plus insert/delete bookkeeping). React assumes (a) different element *types* produce different trees and (b) `key`s identify stable children, collapsing it to **O(n)**.
 * **Where intuition breaks:** That first heuristic has a sharp edge — if an element's *type* changes (`<div>`→`<span>`, or a different component), React **throws away the entire subtree and its state** rather than diffing into it. A conditionally-swapped wrapper silently resets all child state below it.
 * **[Keyed reconciliation](https://react.dev/learn/rendering-lists#keeping-list-items-in-order-with-key):** `key` lets the diff match old children to new ones across reorders, so it moves nodes instead of destroying and recreating them. A bad key (like array index on a reorderable list) defeats this and silently corrupts component state.
+
+*Without keys the diff matches by position and state sticks to the slot; keys make state follow the element through a reorder.*
+
+```mermaid
+flowchart TD
+    Reorder["List reorders:<br/>[a, b, c] → [b, c, a]"] --> Q{"Keyed?"}
+    Q -->|"no key (index identity)"| NoKey["Diff by position"]
+    NoKey --> Bug["Reuses node 0 for 'b', etc.<br/>component state sticks to the slot — BUG"]
+    Q -->|"key={id}"| Keyed["Match by key"]
+    Keyed --> OK["Move existing nodes,<br/>state follows the element — correct"]
+```
+
 * **Why children re-render:** A parent re-render re-renders children unless you memoize ([`React.memo`](https://react.dev/reference/react/memo), stable props). This is the central cost VDOM frameworks fight — and exactly the cost signals avoid by construction.
 
 ## 4. Compiler-Driven Reactivity (Svelte / Vue Vapor)
