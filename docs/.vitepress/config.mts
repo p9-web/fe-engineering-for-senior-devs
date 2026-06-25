@@ -4,6 +4,7 @@ import type MarkdownIt from 'markdown-it'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { icon } from './icons'
 
 // Canonical production origin (GitHub Pages project site) — drives JSON-LD urls + llms.txt links.
 const SITE_URL = 'https://p9-web.github.io/fe-engineering-for-senior-devs'
@@ -13,24 +14,31 @@ const COURSE_ID = `${SITE_URL}/#course`
 const DOCS_DIR = fileURLToPath(new URL('..', import.meta.url)) // docs/.vitepress -> docs/
 
 // Modules grouped by career-value tier; numbers run in tier order — see course-syllabus.md.
+// `icon` is a Lucide name (see ./icons) projected into nav/sidebar display text via withIcons().
 const tier1 = [
-  { text: '01 · JS Runtime', link: '/module-1-js-runtime' },
-  { text: '02 · Browser as OS', link: '/module-2-browser-os' },
-  { text: '03 · Performance Engineering', link: '/module-3-performance-engineering' },
-  { text: '04 · Network Bridge', link: '/module-4-network-bridge' },
+  { text: '01 · JS Runtime', link: '/module-1-js-runtime', icon: 'cpu' },
+  { text: '02 · Browser as OS', link: '/module-2-browser-os', icon: 'app-window' },
+  { text: '03 · Performance Engineering', link: '/module-3-performance-engineering', icon: 'gauge' },
+  { text: '04 · Network Bridge', link: '/module-4-network-bridge', icon: 'network' },
 ]
 const tier2 = [
-  { text: '05 · Reactivity', link: '/module-5-reactivity' },
-  { text: '06 · Data Structures', link: '/module-6-data-structures' },
-  { text: '07 · Compilers & ASTs', link: '/module-7-compilers' },
-  { text: '08 · Build Systems', link: '/module-8-build-systems' },
+  { text: '05 · Reactivity', link: '/module-5-reactivity', icon: 'zap' },
+  { text: '06 · Data Structures', link: '/module-6-data-structures', icon: 'binary' },
+  { text: '07 · Compilers & ASTs', link: '/module-7-compilers', icon: 'braces' },
+  { text: '08 · Build Systems', link: '/module-8-build-systems', icon: 'package' },
 ]
 const tier3 = [
-  { text: '09 · Build From Scratch', link: '/module-9-build-things' },
-  { text: '10 · Browser APIs', link: '/module-10-browser-apis' },
-  { text: '11 · Source-Reading', link: '/module-11-source-code-judgment' },
-  { text: '12 · Systems Design', link: '/module-12-systems-design' },
+  { text: '09 · Build From Scratch', link: '/module-9-build-things', icon: 'hammer' },
+  { text: '10 · Browser APIs', link: '/module-10-browser-apis', icon: 'puzzle' },
+  { text: '11 · Source-Reading', link: '/module-11-source-code-judgment', icon: 'glasses' },
+  { text: '12 · Systems Design', link: '/module-12-systems-design', icon: 'workflow' },
 ]
+
+// Project the Lucide icon into the menu label (nav/sidebar render `text` via v-html).
+// Used for display ONLY — schema/llms.txt read the base arrays above so no SVG leaks into metadata.
+type Module = { text: string; link: string; icon: string }
+const withIcons = (mods: Module[]) =>
+  mods.map((m) => ({ text: icon(m.icon, 16) + m.text, link: m.link }))
 
 // Only modules whose source page actually exists are schema'd / linked.
 // (10 & 11 appear in the syllabus + nav but aren't authored yet; they auto-join once their .md lands.)
@@ -216,28 +224,28 @@ export default defineConfig({
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
     nav: [
-      { text: 'Home', link: '/' },
-      { text: 'Syllabus', link: '/course-syllabus' },
-      { text: 'Tier 1 · Foundation', items: tier1 },
-      { text: 'Tier 2 · Differentiators', items: tier2 },
-      { text: 'Tier 3 · Rare Territory', items: tier3 },
+      { text: icon('home', 15) + 'Home', link: '/' },
+      { text: icon('list', 15) + 'Syllabus', link: '/course-syllabus' },
+      { text: 'Tier 1 · Foundation', items: withIcons(tier1) },
+      { text: 'Tier 2 · Differentiators', items: withIcons(tier2) },
+      { text: 'Tier 3 · Rare Territory', items: withIcons(tier3) },
     ],
     sidebar: [
       {
         text: 'Overview',
-        items: [{ text: 'Course Syllabus', link: '/course-syllabus' }],
+        items: [{ text: icon('compass', 16) + 'Course Syllabus', link: '/course-syllabus' }],
       },
       {
         text: 'Tier 1 · Non-Negotiable Foundation',
-        items: tier1,
+        items: withIcons(tier1),
       },
       {
         text: 'Tier 2 · The Differentiators',
-        items: tier2,
+        items: withIcons(tier2),
       },
       {
         text: 'Tier 3 · Rare-Engineer Territory',
-        items: tier3,
+        items: withIcons(tier3),
       },
     ],
     socialLinks: [
