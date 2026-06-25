@@ -66,6 +66,19 @@ The killer consequence for the web: a malicious script could, in principle, read
 
 So two things follow architecturally: separate sites into separate processes (§1, so there's nothing valuable to read), and only hand back precise timers / shared memory to pages that *prove* they've sealed themselves off (§3).
 
+*The secret is never read architecturally — it leaks through the cache and is recovered by timing, byte by byte.*
+
+```mermaid
+flowchart TD
+    Train["Attacker mistrains<br/>the branch predictor"] --> Spec["CPU speculatively reads<br/>a secret it shouldn't"]
+    Spec --> Index["Secret used to index an array<br/>loads a secret-dependent cache line"]
+    Index --> Rollback["Misprediction: architectural<br/>state rolled back"]
+    Rollback --> Residue["But the cache line stays warm<br/>(micro-architectural residue)"]
+    Residue --> Time["Attacker times array accesses:<br/>cached = fast, uncached = slow"]
+    Time --> Recover["Timing reveals the byte —<br/>secret recovered, never read directly"]
+    Recover --> Repeat["Repeat byte by byte"]
+```
+
 > **Self-Test:**
 > Spectre never "reads" the secret with a normal load instruction — the speculative read is rolled back. So how does the attacker actually learn the value, and why does removing `SharedArrayBuffer` and coarsening `performance.now()` blunt the attack rather than fix the CPU? *(The secret leaks through the **cache side channel**: speculative execution caches a memory line chosen by the secret's value, and the attacker recovers it by **timing** which line is now fast to access. The CPU flaw remains; what the browser removes is the **measuring instrument** — a high-resolution clock. `SharedArrayBuffer` + a spinning worker is a homemade nanosecond timer, and `performance.now()` was the built-in one, so coarsening/gating both denies the precision needed to distinguish a cache hit from a miss.)*
 
@@ -98,6 +111,18 @@ if (self.crossOriginIsolated) {
 
 This is the mechanism Modules 10 and 13 referred to as "requires cross-origin isolation." It's not bureaucracy — it's the price of being trusted with a Spectre-capable primitive.
 
+*COOP seals the opener side and COEP the embedding side; only both together earn back crossOriginIsolated.*
+
+```mermaid
+flowchart TD
+    Goal["Want SharedArrayBuffer +<br/>high-res timers back"] --> Both{"Both headers set?"}
+    COOP["COOP: same-origin<br/>seals the OPENER side<br/>(no cross-origin window holds you)"] --> Both
+    COEP["COEP: require-corp<br/>seals the EMBEDDING side<br/>(cross-origin subresources must opt in)"] --> Both
+    COEP -.->|forces| CORP["CORP: resource declares<br/>who may embed it"]
+    Both -->|yes| Iso["crossOriginIsolated = true<br/>sharp tools re-enabled"]
+    Both -->|"only one"| No["Stays false —<br/>can't prove nothing is co-resident"]
+```
+
 > **Self-Test:**
 > A developer sets `COOP: same-origin` alone, expecting `SharedArrayBuffer` to work, and `crossOriginIsolated` stays `false`. Why is COOP necessary but not sufficient, and what specific gap does COEP close that COOP can't? *(COOP only seals the **opener/window** relationship — it stops cross-origin windows from holding a reference to yours. But your page can still **embed** arbitrary cross-origin subresources (images, scripts, fonts) that load into your process, leaving cross-origin data co-resident and re-exposing the Spectre target. COEP closes that by requiring every embedded cross-origin resource to opt in (via CORP/CORS). Isolation needs both the opener side and the embedding side sealed, so the browser only grants `crossOriginIsolated` when both headers are present.)*
 
@@ -120,6 +145,17 @@ el.innerHTML = policy.createHTML(userString)  // ok — goes through your audite
 ```
 
 The architectural win is **enforced funneling**: instead of auditing the hundreds of places a string *could* reach a sink, you guarantee at the platform level that *every* sink write passes through a small number of policies you can actually review. DOM XSS stops being "did we miss an escape somewhere?" and becomes "is our one policy correct?" — a question you can answer.
+
+*The sink rejects plain strings — the only way through is a value minted by your registered policy, which forces sanitization.*
+
+```mermaid
+flowchart TD
+    Data["Untrusted data<br/>(location.hash, JSON, template)"] --> Sink{"Write to a DOM sink<br/>e.g. el.innerHTML = ..."}
+    Sink -->|"plain string,<br/>no Trusted Types"| XSS["Markup executes — DOM XSS"]
+    Sink -->|"plain string,<br/>require-trusted-types-for 'script'"| Reject["Platform throws —<br/>assignment rejected"]
+    Sink -->|"TrustedHTML from your policy"| Policy["policy.createHTML()<br/>runs your sanitizer (DOMPurify)"]
+    Policy --> Safe["Sanitized markup written safely"]
+```
 
 > **Self-Test:**
 > Your app HTML-escapes all user input on the server, yet a `#<img src=x onerror=...>` in the URL fragment still executes because client code does `panel.innerHTML = decodeURIComponent(location.hash.slice(1))`. Why did server-side escaping not help, and how does Trusted Types stop this where another round of escaping might not? *(The payload never went through the server — it lives in the URL fragment and is injected entirely client-side, so server escaping is irrelevant; this is DOM-based XSS. Trusted Types blocks it structurally: with `require-trusted-types-for 'script'`, assigning a **plain string** to `innerHTML` throws, regardless of where the string came from. The only way to write the sink is via a registered policy, which forces the value through your sanitizer — you can't accidentally forget to escape, because the platform rejects the unsafe call itself.)*

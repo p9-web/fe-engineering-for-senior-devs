@@ -114,6 +114,21 @@ Server-side rendering used to be all-or-nothing: run the whole component tree to
 * Where a subtree is waiting on data, it emits a **placeholder** (fallback UI) and keeps the connection open.
 * When that data resolves on the server, it streams the real markup for that subtree in a later chunk, plus a tiny inline script that swaps the placeholder for the content in place.
 
+*Flush the shell immediately for a fast first paint, then stream each Suspense boundary's content as its data resolves.*
+
+```mermaid
+sequenceDiagram
+    participant Server
+    participant Browser
+    Server->>Browser: Flush shell HTML (head, layout, Suspense placeholder)
+    Note over Browser: Paint shell + placeholder immediately (fast FCP)
+    Server->>Server: await slow data (e.g. DB query)
+    Server->>Browser: Stream content chunk + inline swap script
+    Note over Browser: Script swaps placeholder for real content
+    Server->>Browser: Stream remaining boundaries as they resolve
+    Note over Browser: Hydrate islands as their chunks arrive
+```
+
 In React this maps onto **`<Suspense>` boundaries**: each boundary is a flush point. `renderToReadableStream` (the Web-streams API used by edge runtimes) produces exactly the `ReadableStream` you return from §3. The shell is interactive via **selective hydration** — React hydrates ready boundaries without waiting for the whole tree, and prioritizes the one the user interacts with first.
 
 ```jsx

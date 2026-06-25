@@ -53,6 +53,17 @@ Before observers, watching for "did this element resize / scroll into view / cha
 > **Self-Test:**
 > A lazy-image implementation uses a throttled `scroll` listener that reads `getBoundingClientRect()` on every image; it janks. Why does swapping to `IntersectionObserver` fix the *cause*, not just the symptom? (The scroll handler forces a synchronous layout on every fire to read rects — work on the main thread, in the scroll critical path. `IntersectionObserver` computes intersections asynchronously off the main thread and notifies only on threshold crossings, so the per-scroll layout cost disappears entirely instead of being merely throttled.)
 
+*Scroll-listener polling forces a synchronous layout on every event; IntersectionObserver computes off the main thread and notifies post-render.*
+
+```mermaid
+flowchart TD
+    Need["Need: is element visible?"] --> Old["Old: scroll listener +<br/>getBoundingClientRect()"]
+    Need --> New["Modern: IntersectionObserver"]
+    Old --> Sync["forces sync layout every scroll<br/>(main thread) → jank"]
+    New --> Async["computes off main thread,<br/>callback batched post-render"]
+    Async --> Smooth["no per-scroll layout → smooth"]
+```
+
 ## 2. Web Workers: A Second Thread, at a Price
 Your JS runs on *one* main thread shared with layout and paint (Module 2). CPU-bound work — parsing a big file, image processing, crypto — blocks rendering and input. A **Web Worker** runs script on a separate OS thread with its own event loop.
 

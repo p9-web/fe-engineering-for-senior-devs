@@ -52,6 +52,19 @@ Before a single byte of your JS arrives, the browser pays for a chain of round t
 
 **Concrete math:** on a 50ms-latency link with a *warm DNS cache*, the 2-RTT TLS-over-TCP setup is ~100ms gone *before* the first byte of HTML; cold, add the DNS RTT for ~3 RTT / ~150ms. QUIC's single combined handshake cuts the setup to ~50ms. This is why **`preconnect`** matters: warming DNS+TCP+TLS for an origin you're *about* to hit removes that chain from the critical moment.
 
+*A cold HTTPS connection is three serial round-trips; QUIC folds them into one, and preconnect pays them before you need the byte.*
+
+```mermaid
+flowchart TD
+    subgraph TCPTLS["TCP + TLS 1.3 (~3 RTT cold)"]
+      A1["DNS lookup<br/>~1 RTT"] --> A2["TCP handshake<br/>1 RTT"] --> A3["TLS 1.3<br/>1 RTT"] --> A4["First byte"]
+    end
+    subgraph QUICp["QUIC / HTTP/3 (~1 RTT)"]
+      B1["DNS lookup"] --> B2["QUIC handshake<br/>TCP+TLS folded into 1 RTT"] --> B3["First byte"]
+    end
+    A1 -.->|"preconnect warms DNS+TCP+TLS ahead of need"| Warm["0 handshake cost at request time"]
+```
+
 > **0-RTT caveat:** early data can be **[replayed](https://datatracker.ietf.org/doc/html/rfc8446#section-8)** by an attacker, so it's only safe for **idempotent** requests (a `GET`, not a "transfer funds" `POST`).
 
 ## 2. Delivery Protocols (HTTP/1.1 → /2 → /3)
@@ -60,6 +73,17 @@ How the browser requests files dictates when the engine can start parsing.
 * **HTTP/1.1 bottleneck:** One request/response per connection at a time → **[head-of-line blocking](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Connection_management_in_HTTP_1.x)**; a small script stuck behind a big image. Browsers opened ~6 connections per origin to compensate.
 * **[HTTP/2 multiplexing](https://datatracker.ietf.org/doc/html/rfc9113#section-5):** Many concurrent streams over **one** TCP connection. This is what makes shipping 50 small ES modules (Vite dev) viable without per-request overhead.
 * **HTTP/3 & QUIC:** HTTP/2 still suffered TCP-level head-of-line blocking — one lost packet stalls *every* stream while TCP retransmits. [HTTP/3 runs over](https://datatracker.ietf.org/doc/html/rfc9114) **QUIC (UDP)** with independent streams: a lost packet stalls only its own stream.
+
+*One lost packet stalls every HTTP/2 stream on the shared TCP connection; HTTP/3 isolates the loss to its own stream.*
+
+```mermaid
+flowchart TD
+    Loss["One packet is lost"] --> Q{"Transport?"}
+    Q -->|"HTTP/2 over TCP"| H2["TCP must redeliver in order"]
+    H2 --> Block["ALL multiplexed streams stall<br/>(head-of-line blocking)"]
+    Q -->|"HTTP/3 over QUIC"| H3["Loss tracked per stream"]
+    H3 --> Iso["Only the affected stream waits<br/>others keep flowing"]
+```
 
 > **Self-Test:**
 > HTTP/2 multiplexes many streams over one TCP connection, yet a single dropped packet can still stall *all* of them. Why — and why is HTTP/3 immune? (TCP delivers bytes in strict order, so one lost segment blocks every multiplexed stream until retransmit. QUIC tracks loss per-stream, so only the affected stream waits.)
@@ -75,6 +99,22 @@ You can tell the browser what to fetch and how urgently.
 
 ## 4. Caching Is Not One Thing — It's Layers
 "Cached" is ambiguous; there are several caches with different rules.
+
+*A request falls through three caches — memory, disk, Service Worker — each with its own lifetime and revalidation rules.*
+
+```mermaid
+flowchart TD
+    Req["Request"] --> Mem{"Memory cache?<br/>(per-tab, this session)"}
+    Mem -->|hit| R1["Serve instantly — 0 RTT"]
+    Mem -->|miss| Disk{"Disk cache?<br/>(HTTP headers)"}
+    Disk -->|"fresh (max-age) / immutable"| R2["Serve from disk — 0 RTT"]
+    Disk -->|"stale"| Reval["Revalidate (If-None-Match)"]
+    Reval -->|304| R3["Serve from disk — 1 RTT"]
+    Reval -->|200| R4["Fresh body — 1 RTT"]
+    Disk -->|miss| SW{"Service Worker<br/>Cache API?"}
+    SW -->|hit| R5["Serve (programmable)"]
+    SW -->|miss| Net["Network — full cost"]
+```
 
 * **Memory cache:** Per-tab, lives for the page session; instant. (Reused assets may be promoted here for the session — the browser decides heuristically by resource type and reuse likelihood, it's not guaranteed.)
 * **Disk (HTTP) cache:** Governed by response headers — [`Cache-Control`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control)`: max-age`, `ETag` + `If-None-Match` (a 304 saves the body but still costs an RTT), and `immutable`.

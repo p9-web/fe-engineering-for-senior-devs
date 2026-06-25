@@ -117,6 +117,17 @@ The mental model is a **3D grid of invocations**, organized in two levels:
 
 So **total invocations = workgroup_size × number of workgroups**. To cover N elements with `@workgroup_size(64)`, you dispatch `ceil(N / 64)` workgroups — which usually overshoots N, hence the `if (i >= arrayLength) return` tail guard.
 
+*Dispatch count times workgroup size sets the invocation grid; the flat global_invocation_id maps each invocation to one array element.*
+
+```mermaid
+flowchart TD
+    Disp["dispatchWorkgroups(ceil(N / 64))<br/>e.g. N = 200 → 4 groups"] --> WG["@workgroup_size(64)<br/>64 invocations per group"]
+    WG --> Total["4 × 64 = 256 invocations"]
+    Total --> Map["global_invocation_id.x = flat index"]
+    Map --> Work["invocation i processes element i"]
+    Work --> Guard["guard: if i is past array length, return<br/>(256 invocations, 200 elements)"]
+```
+
 ```js
 const module = device.createShaderModule({ code: wgsl })
 const pipeline = device.createComputePipeline({
@@ -155,6 +166,24 @@ readback.unmap()
 ```
 
 Count the round trip: **upload** (`writeBuffer`) → **compute** → **GPU-to-GPU copy** (`copyBufferToBuffer`) → **submit** → `mapAsync` stalls until the GPU timeline catches up and the data is DMA'd to mappable memory → **copy out** of the mapped range. The `mapAsync` await is the killer: it forces a synchronization point between the asynchronous GPU timeline and your JS event loop (Module 1). For a one-shot small computation, this latency dwarfs the math. WebGPU compute pays off when the data **stays resident** on the GPU across many passes and only rarely comes back — a physics simulation stepping 60×/sec on-GPU, reading back only what it must draw.
+
+*Compute is async and effectively free; the mapAsync read-back is where the CPU stalls waiting for the GPU timeline.*
+
+```mermaid
+sequenceDiagram
+    participant JS
+    participant Q as GPU queue
+    participant GPU as GPU (storage buffer)
+    participant SB as Staging buffer (MAP_READ)
+    JS->>GPU: writeBuffer(input)
+    JS->>Q: submit(compute pass)
+    Q->>GPU: run shader (async, JS does not wait)
+    JS->>GPU: copyBufferToBuffer(storage → staging)
+    JS->>SB: mapAsync(READ)
+    Note over JS,SB: STALL — waits for GPU timeline + DMA
+    SB->>JS: mapped range ready
+    JS->>SB: read bytes, then unmap()
+```
 
 > **Self-Test:**
 > Why does `mapAsync` return a *promise*, and what would go wrong if WebGPU let you read the storage buffer synchronously right after `submit()`? *(GPU work runs on its own timeline asynchronously; at the instant `submit()` returns, the compute almost certainly hasn't run yet. A synchronous read would either return stale/garbage memory or force a full pipeline stall blocking the main thread. `mapAsync` resolves only once the GPU has finished the work and the results are visible to the CPU, keeping the JS thread free in the meantime — the same "don't block the one thread" discipline as the rest of the platform.)*

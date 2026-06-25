@@ -65,6 +65,19 @@ The old model (webpack-era) bundled your *entire* app before serving the first b
 * **Why pre-bundle dependencies anyway ([`optimizeDeps`](https://vite.dev/guide/dep-pre-bundling.html)):** Two problems make raw native-ESM unworkable for `node_modules`. (1) Many deps still ship **CommonJS or UMD**, which the browser can't `import` — esbuild converts them to ESM. (2) A single dep like `lodash-es` is *hundreds* of internal modules; served raw, that's hundreds of HTTP requests — a waterfall that stalls the page. esbuild **pre-bundles each dependency into one (or few) module(s)**, so `import 'lodash-es'` is one request. Vite caches the result in `node_modules/.vite` and only re-runs when your lockfile changes.
 * **The asymmetry that matters:** *your* code is served unbundled (so edits are instant and granular); *dependencies* are bundled once (because they rarely change and bundling pays off). Different strategies for different change frequencies.
 
+*App code is transformed on demand while dependencies are pre-bundled once — that asymmetry is why the dev server starts instantly.*
+
+```mermaid
+flowchart TD
+    Req["Browser requests a module"] --> Q{"App code or dependency?"}
+    Q -->|"app code (.ts/.vue)"| App["Transform on demand:<br/>strip types, rewrite bare imports"]
+    Q -->|"dependency (node_modules)"| Dep["Serve pre-bundled<br/>(.vite/deps, esbuild)"]
+    App --> ESM["Native ESM to browser"]
+    Dep --> ESM
+    App -.->|edit| Fast["instant re-eval"]
+    Dep -.->|"only re-bundles on lockfile change"| Cache["cached"]
+```
+
 ## 3. Why esbuild Is Fast (and Where It Stops)
 esbuild does the dev transform and pre-bundle. It's 10–100× faster than JS-based toolchains — not because the algorithm is cleverer, but because of *execution-level* choices.
 
@@ -77,6 +90,20 @@ Hot Module Replacement is not "reload the file." A full reload would wipe all in
 * **The module graph:** Vite maintains a graph of which module imports which. When you save a file, Vite finds that node and walks the import edges **upward** toward the entry, looking for an **HMR boundary**.
 * **Accept boundaries ([`import.meta.hot.accept`](https://vite.dev/guide/api-hmr.html#hot-accept-cb)):** A module that calls `import.meta.hot.accept(cb)` declares "I can replace myself in place." Framework plugins inject this for you — [`@vitejs/plugin-vue`](https://github.com/vitejs/vite-plugin-vue) makes every `.vue` file self-accepting, re-rendering the component with its state preserved. Propagation stops at the first accepting module; only the path from the change up to that boundary is invalidated and re-fetched.
 * **What forces a full reload:** If propagation reaches the entry with no boundary in between (e.g. you edited a module that mutates global state and nobody accepts it), Vite gives up and reloads the page. *That's* why editing a leaf component is instant but editing a shared store often reloads everything.
+
+*An edit walks the import graph upward until it hits an accept boundary; reach the entry without one and you get a full reload.*
+
+```mermaid
+flowchart TD
+    Edit["Edit module B"] --> Find["Find importers of B"]
+    Find --> Walk["Walk import graph upward"]
+    Walk --> Q{"Does this module call<br/>import.meta.hot.accept?"}
+    Q -->|yes| Stop["HMR boundary:<br/>re-run only down to here"]
+    Q -->|no| Up["keep walking up"]
+    Up --> Q2{"Reached entry with<br/>no boundary?"}
+    Q2 -->|yes| Reload["Full page reload"]
+    Stop --> Keep["App state survives"]
+```
 
 > **Self-Test:**
 > You edit a `.vue` component and its `ref` state is preserved; you edit a plain `.ts` utility it imports and the whole page reloads. Why the difference? (The `.vue` file is an HMR *boundary* — the plugin made it self-accepting, so only it re-executes. The `.ts` util declares no `accept`, so Vite propagates the invalidation upward; finding no boundary before the entry, it falls back to a full reload.)

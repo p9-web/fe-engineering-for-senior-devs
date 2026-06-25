@@ -53,6 +53,18 @@ The consequence: your JavaScript runs in *one* sandboxed renderer with *one* mai
 ## 2. The Rendering Pipeline
 Every time a page loads or updates, it converts code into pixels through a strict sequence — the **[pixel pipeline](https://web.dev/articles/rendering-performance)**.
 
+*Every frame flows one way — DOM and CSSOM through layout and paint to a GPU composite.*
+
+```mermaid
+flowchart LR
+    DOM["DOM"] --> CSSOM["CSSOM"]
+    CSSOM --> Style["Style<br/>(recalc)"]
+    Style --> Layout["Layout<br/>(reflow)"]
+    Layout --> Paint["Paint<br/>(display list)"]
+    Paint --> Raster["Raster + tiles"]
+    Raster --> Composite["Composite<br/>(GPU)"]
+```
+
 * **DOM Construction:** Parse HTML into a tree of nodes (Document Object Model).
 * **CSSOM Construction:** Parse CSS into a tree (CSS Object Model). CSS is **[render-blocking](https://web.dev/articles/render-blocking-css)** (the browser won't paint until the CSSOM is ready) but **not parser-blocking** — HTML parsing continues. The catch: a `<script>` must wait for in-flight CSS, because the script might read computed styles, so **CSSOM blocks JS execution**. (Only scripts block the HTML parser.)
 * **Style:** Match selectors to nodes and compute the final value of every property. Costly with huge stylesheets or expensive selectors; invalidation here can cascade.
@@ -62,6 +74,16 @@ Every time a page loads or updates, it converts code into pixels through a stric
 
 ## 3. GPU Compositing & Hardware Acceleration
 Not all CSS changes cost the same — what matters is *how far down the pipeline* a change forces the browser to re-run.
+
+*Where a property change re-enters the pipeline decides its cost — compositor-only is cheap, layout-triggering is not.*
+
+```mermaid
+flowchart TD
+    Change["A style changes"] --> Q{"Which property?"}
+    Q -->|"transform, opacity"| Comp["Compositor only<br/>(GPU, off main thread) — cheap"]
+    Q -->|"color, background, box-shadow"| Pnt["Paint → Composite<br/>(skip layout) — medium"]
+    Q -->|"width, top, margin, font-size"| Lay["Layout → Paint → Composite<br/>(main thread) — expensive"]
+```
 
 * **Main thread vs. compositor thread:** Style, Layout, and Paint happen on the main thread. Compositing happens on the **[compositor thread](https://web.dev/articles/rendering-performance)** with the GPU — so it keeps running even when the main thread is busy (which is why a janky page can still scroll smoothly if scrolling is compositor-driven).
 * **`transform` / `opacity`:** Animating these touches *only* the compositor. The layer is already painted; the GPU just re-positions or fades it. Cheap, off-main-thread.
@@ -85,6 +107,27 @@ Smooth animation runs at the display's refresh rate — typically 60 FPS.
 
 * **The 16.67ms budget:** 1s / 60 = 16.67ms. Within that window the browser must run pending JS, recalc style, lay out, paint, and composite. Overrun and you **drop a frame** (jank).
 * **The "update the rendering" step:** Microtasks drain after *every* task and *every* callback — not once per frame. Periodically, between tasks, the browser runs its render step. The ordering has a subtlety worth getting right: [`requestAnimationFrame`](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame) callbacks run *first*, then style and layout — and **`ResizeObserver` is delivered *after* layout** (it observes the just-computed sizes), so a resize callback that mutates layout can force another layout pass, looping within the frame. `IntersectionObserver` delivery is queued separately, post-render. The takeaway that matters: **`rAF` runs just before style/layout**, so it's the correct place to batch DOM writes into the upcoming frame.
+
+*requestAnimationFrame runs before style and layout; ResizeObserver delivers after — that ordering is the whole game.*
+
+```mermaid
+sequenceDiagram
+    participant JS as Tasks / JS
+    participant Micro as Microtasks
+    participant RAF as requestAnimationFrame
+    participant Style
+    participant Layout
+    participant RO as ResizeObserver
+    participant Paint as Paint / Composite
+    JS->>Micro: drain microtasks
+    Micro->>RAF: run rAF callbacks (before layout)
+    RAF->>Style: recalc style
+    Style->>Layout: reflow
+    Layout->>RO: deliver ResizeObserver (post-layout)
+    RO->>Paint: (may dirty layout again)
+    Paint->>Paint: raster + composite
+```
+
 * **`requestAnimationFrame`:** Run a callback right before the next render. For visual updates.
 * **[`requestIdleCallback`](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback):** Run during idle time. For non-urgent work (analytics, prefetch) — but it yields the instant the browser has frame work to do.
 * **Long tasks vs. INP — two different things:** A task over 50ms is a **Long Task** (the [Long Tasks API](https://developer.mozilla.org/en-US/docs/Web/API/PerformanceLongTaskTiming) threshold) that monopolizes the main thread. **INP** (Interaction to Next Paint) measures the *latency of a specific interaction*, regardless of long-task count — though long tasks are a common cause of bad INP. The fix is **yielding**: break long work into chunks and hand control back ([`await scheduler.yield()`](https://developer.mozilla.org/en-US/docs/Web/API/Scheduler/yield) — Chromium-only as of writing, and it resumes at the task's original priority — or chunking with `scheduler.postTask()` priorities) so input can interleave.

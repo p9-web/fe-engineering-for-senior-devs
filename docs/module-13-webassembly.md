@@ -88,6 +88,24 @@ Crossing the boundary is cheap for numbers and expensive for everything else.
 * **Why strings/objects are expensive:** Wasm functions only speak numbers and their own linear memory. A JS string has no Wasm representation — so the glue must **encode it to UTF-8 bytes, copy them into linear memory, pass a `(pointer, length)` pair**, and the module decodes from there. That copy *is* the "serialization cost." [`wasm-bindgen`](https://github.com/wasm-bindgen/wasm-bindgen) and [Emscripten](https://emscripten.org/docs/porting/connecting_cpp_and_javascript/index.html) generate exactly this glue; it's not magic, it's `TextEncoder` + a memcpy.
 * **The implication:** One big computation across the boundary = huge win. Thousands of tiny crossings per frame (e.g. driving the DOM string-by-string) = often *slower* than plain JS, because copy + boundary overhead dominates.
 
+*Only numbers cross the JS-Wasm line — a string costs an encode plus a copy into linear memory each way.*
+
+```mermaid
+sequenceDiagram
+    participant JS as JavaScript
+    participant Glue as Binding glue
+    participant Mem as Wasm linear memory
+    participant W as Wasm function
+    JS->>Glue: pass "hello" (UTF-16 string)
+    Glue->>Glue: encode to UTF-8 bytes
+    Glue->>Mem: copy bytes into memory at ptr
+    Glue->>W: call(ptr, len) — only numbers cross
+    W->>Mem: read bytes at ptr
+    W->>Mem: write result bytes
+    Mem->>Glue: copy result out
+    Glue->>JS: decode to JS value
+```
+
 > **Self-Test:**
 > You move an image filter to Rust/Wasm and it's *slower* than the JS version. The pixels are a `Uint8Array`. What's the likely cause, and what's the fix? (Likely: you're copying the buffer across the boundary every call. Fix: allocate the pixel buffer *inside* Wasm linear memory once, expose it as a typed-array view, and mutate in place — pass a pointer, not the data. And remember §3: if the module ever calls `memory.grow`, re-create that view.)
 
