@@ -1,14 +1,14 @@
 ---
-title: "Module 8 · Build Difficult Things from Scratch"
+title: "Module 9 · Build Difficult Things from Scratch"
 description: "Build the hard things from scratch — a variable-height virtual scroller, a re-entrant reactive engine, a mini framework, and an HMR dev server — and hit the real walls."
 learn:
-  module: 8
+  module: 9
   level: advanced
   timeRequired: PT1H
   prerequisites:
-    - "reactivity internals (module 4)"
+    - "reactivity internals (module 5)"
     - "compositor & transform (module 2)"
-    - "the module graph (module 6)"
+    - "the module graph (module 7)"
   outcomes:
     - "Implement a variable-height virtual scroller with prefix-sum + binary search"
     - "Build an effect system that survives re-entrant (nested) effects"
@@ -33,7 +33,7 @@ learn:
   teachingApproach: "Build the naive version, hit the exact wall the real authors hit, then earn the fix."
 ---
 
-# Module 8: Build Difficult Things from Scratch
+# Module 9: Build Difficult Things from Scratch
 
 Reading source code is excellent, but true mastery requires implementation. You don't truly understand a complex system until you've built it and hit the exact brick walls the original authors faced. Each project below names that wall — the non-obvious problem that *is* the lesson.
 
@@ -57,7 +57,7 @@ Rendering 100,000 rows crashes the browser. A virtual scroller renders only what
 > With fixed heights the spacer is `totalCount * rowHeight`. With variable heights, what replaces that single multiply? You build a *prefix-sum* (cumulative offset) array: reading row N's offset is then O(1), but finding *which* row sits at a given `scrollTop` becomes a **binary search** over that array — O(log n), not the O(1) division you had with fixed heights. Naming both costs is the point.
 
 ## 2. A Custom Reactive Engine
-Rebuild the core of Module 4 yourself — including the two things that make it actually correct: reentrancy and cleanup.
+Rebuild the core of Module 5 yourself — including the two things that make it actually correct: reentrancy and cleanup.
 
 ```js
 let active = null
@@ -89,9 +89,9 @@ function effect(fn) {
 }
 ```
 
-* **`computed(fn)`:** Derived signal that caches and only recomputes when a dependency changed — implement the `dirty` flag + scheduler from Module 4.
+* **`computed(fn)`:** Derived signal that caches and only recomputes when a dependency changed — implement the `dirty` flag + scheduler from Module 5.
 * **Why cleanup needs `e.deps`:** an effect can't reach a signal's private `subs` set directly. The fix is the **two-way link** above — when a signal is read, it adds the effect to its `subs` *and* records itself on the effect's `deps`. Now `run()` can walk `e.deps` and unsubscribe before re-tracking. Without it, an effect that conditionally reads a signal keeps a stale subscription forever. This single problem is why real reactivity is more than 15 lines.
-* **Re-entrancy caveat (the same wall as the store below):** `set` runs subscribers *synchronously*. If an effect writes a signal it also reads, it re-triggers itself — and without a scheduler that's an infinite loop. Iterate a snapshot (`[...subs]`) so you don't mutate the set mid-flush, and in a real engine route re-runs through a batched scheduler (Module 4) rather than calling `run()` inline.
+* **Re-entrancy caveat (the same wall as the store below):** `set` runs subscribers *synchronously*. If an effect writes a signal it also reads, it re-triggers itself — and without a scheduler that's an infinite loop. Iterate a snapshot (`[...subs]`) so you don't mutate the set mid-flush, and in a real engine route re-runs through a batched scheduler (Module 5) rather than calling `run()` inline.
 
 ## 3. A Mini Component Framework
 Combine your reactive engine with DOM updates to render a `<Counter />`.
@@ -108,7 +108,7 @@ Build a global store like Pinia or Redux.
 
 * **Subscriptions:** Components across the tree subscribe to slices of external state.
 * **Persistence:** Hydrate initial state from (and write changes back to) `localStorage`/`IndexedDB` — the wall here is *when* to serialize (debounced, not every mutation) and how to avoid persisting derived/transient fields.
-* **The brick wall — batching:** A handler that mutates three fields synchronously must re-render **once**. Queue invalidated subscribers in a `Set` (auto-dedup) and flush on the next microtask (`queueMicrotask`) — the same scheduler pattern Vue uses for `nextTick` (Module 4).
+* **The brick wall — batching:** A handler that mutates three fields synchronously must re-render **once**. Queue invalidated subscribers in a `Set` (auto-dedup) and flush on the next microtask (`queueMicrotask`) — the same scheduler pattern Vue uses for `nextTick` (Module 5).
 
 ```js
 const dirty = new Set(); let scheduled = false
@@ -131,8 +131,8 @@ function flush() {
 ## 5. A Simplified Bundler (Like Vite Dev)
 Browsers support ES modules (`<script type="module">`) but choke on bare imports like `import React from 'react'`.
 
-* **Module resolution:** Run a local server that intercepts requests for `.js`, parses each file to find its imports (Module 6), and **rewrites** bare specifiers to real URLs (`'react'` → `/@modules/react`), serving the resolved file from `node_modules`.
-* **The brick wall — the dependency graph & HMR:** To support hot updates you must track *who imports whom*. When a file changes you walk that graph to find the smallest set of modules to re-send, and push an invalidation over a WebSocket (Module 3) — instead of reloading the page. Building the graph is the real work; rewriting imports is the easy part.
+* **Module resolution:** Run a local server that intercepts requests for `.js`, parses each file to find its imports (Module 7), and **rewrites** bare specifiers to real URLs (`'react'` → `/@modules/react`), serving the resolved file from `node_modules`.
+* **The brick wall — the dependency graph & HMR:** To support hot updates you must track *who imports whom*. When a file changes you walk that graph to find the smallest set of modules to re-send, and push an invalidation over a WebSocket (Module 4) — instead of reloading the page. Building the graph is the real work; rewriting imports is the easy part.
 
 > **Self-Test:**
 > File `b.js` is imported by `a.js` and `c.js`. You edit `b.js`. Why does HMR need the *reverse* edges (importers), not the forward ones (imports), to know which modules to invalidate — and what stops the invalidation from cascading to the whole graph? *(You walk importers upward to find who's affected; the cascade stops at the first module that declares an HMR boundary — `import.meta.hot.accept()` — which says "I can swap my dependency in place, don't propagate past me." With no accepting boundary, it bubbles to the root and falls back to a full reload.)*

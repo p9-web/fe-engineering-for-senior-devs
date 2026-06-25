@@ -1,8 +1,8 @@
 ---
-title: "Module 3 · The Network & Execution Bridge"
+title: "Module 4 · The Network & Execution Bridge"
 description: "The network bridge: DNS/TCP/TLS round-trip math, HTTP/2 vs HTTP/3, resource hints, cache layers, content hashing, Service Workers, and V8 streaming compilation."
 learn:
-  module: 3
+  module: 4
   level: advanced
   timeRequired: PT40M
   prerequisites:
@@ -38,7 +38,7 @@ learn:
   teachingApproach: "Count round-trips for one request, then show what each protocol and cache layer removes."
 ---
 
-# Module 3: The Network & Execution Bridge
+# Module 4: The Network & Execution Bridge
 
 Code execution cannot begin until the browser receives the code. The network layer is the bridge between the server and the runtime. Understanding how bits are delivered, prioritized, and cached is essential for performance engineering.
 
@@ -79,7 +79,7 @@ You can tell the browser what to fetch and how urgently.
 * **Memory cache:** Per-tab, lives for the page session; instant. (Reused assets may be promoted here for the session — the browser decides heuristically by resource type and reuse likelihood, it's not guaranteed.)
 * **Disk (HTTP) cache:** Governed by response headers — `Cache-Control: max-age`, `ETag` + `If-None-Match` (a 304 saves the body but still costs an RTT), and `immutable`.
 * **Service Worker / Cache API:** Programmable, persists across sessions, works offline (below).
-* **The pattern that ties to Module 6:** ship content-**hashed** filenames (`app.4f3a.js`) with `Cache-Control: max-age=31536000, immutable`. `immutable` tells the browser **not to revalidate within `max-age`** (so it skips even the 304 round trip), and the hash changes only when content does — so you cache for a year *and* bust precisely. (`immutable` without a long `max-age` does nothing — the two go together.) Compression (`brotli` > `gzip`) shrinks transfer, and since fewer bytes means less to parse, it shortens time-to-execute too.
+* **The pattern that ties to Module 7:** ship content-**hashed** filenames (`app.4f3a.js`) with `Cache-Control: max-age=31536000, immutable`. `immutable` tells the browser **not to revalidate within `max-age`** (so it skips even the 304 round trip), and the hash changes only when content does — so you cache for a year *and* bust precisely. (`immutable` without a long `max-age` does nothing — the two go together.) Compression (`brotli` > `gzip`) shrinks transfer, and since fewer bytes means less to parse, it shortens time-to-execute too.
 
 > **Self-Test:**
 > A user reloads and the app is interactive in 200ms with no requests in the Network panel. Which cache layers could be responsible (memory, disk/HTTP, Service Worker), and how do you tell them apart in DevTools? Then: why is a content-hashed `immutable` bundle faster on *repeat* visits than an `ETag`-validated one? (A 304 still costs a round trip; `immutable` costs zero.)
@@ -100,7 +100,7 @@ The boundary between "downloaded" and "executing" is blurrier than it looks.
 ## 7. Real-Time Execution Boundaries
 Apps don't just load once; they receive continuous data the runtime must process.
 
-* **WebSockets:** Bi-directional, persistent, full-duplex over one connection. The server can push anytime — ideal for collaborative editing or multiplayer (e.g. updating a shared signal in real time, Module 4).
+* **WebSockets:** Bi-directional, persistent, full-duplex over one connection. The server can push anytime — ideal for collaborative editing or multiplayer (e.g. updating a shared signal in real time, Module 5).
 * **Server-Sent Events (SSE):** Uni-directional text stream over plain HTTP. Simpler than WebSockets, auto-reconnects — perfect for feeds and notification counters.
 * **WebRTC:** Peer-to-peer over UDP — two browsers stream audio/video/data directly, the lowest-latency option. (**WebTransport**, over HTTP/3, is the emerging middle ground: low-latency, multiplexed, client-server.)
 
