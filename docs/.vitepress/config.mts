@@ -33,6 +33,12 @@ const tier3 = [
   { text: '11 · Source-Reading', link: '/module-11-source-code-judgment', icon: 'glasses' },
   { text: '12 · Systems Design', link: '/module-12-systems-design', icon: 'workflow' },
 ]
+const tier4 = [
+  { text: '13 · WebAssembly', link: '/module-13-webassembly', icon: 'box' },
+  { text: '14 · WebGPU & Compute', link: '/module-14-webgpu', icon: 'grid-3x3' },
+  { text: '15 · Edge & Streaming', link: '/module-15-edge-streaming', icon: 'globe' },
+  { text: '16 · Browser Security', link: '/module-16-security', icon: 'shield' },
+]
 
 // Project the Lucide icon into the menu label (nav/sidebar render `text` via v-html).
 // Used for display ONLY — schema/llms.txt read the base arrays above so no SVG leaks into metadata.
@@ -40,9 +46,9 @@ type Module = { text: string; link: string; icon: string }
 const withIcons = (mods: Module[]) =>
   mods.map((m) => ({ text: icon(m.icon, 16) + m.text, link: m.link }))
 
-// Only modules whose source page actually exists are schema'd / linked.
-// (10 & 11 appear in the syllabus + nav but aren't authored yet; they auto-join once their .md lands.)
-const courseModules = [...tier1, ...tier2, ...tier3].filter((m) =>
+// Only modules whose source page actually exists are schema'd / linked
+// (the fs.existsSync filter lets a module auto-join nav/schema once its .md lands).
+const courseModules = [...tier1, ...tier2, ...tier3, ...tier4].filter((m) =>
   fs.existsSync(path.join(DOCS_DIR, `${m.link.replace(/^\//, '')}.md`)),
 )
 
@@ -229,6 +235,7 @@ export default defineConfig({
       { text: 'Tier 1 · Foundation', items: withIcons(tier1) },
       { text: 'Tier 2 · Differentiators', items: withIcons(tier2) },
       { text: 'Tier 3 · Rare Territory', items: withIcons(tier3) },
+      { text: 'Tier 4 · Frontier', items: withIcons(tier4) },
     ],
     sidebar: [
       {
@@ -246,6 +253,10 @@ export default defineConfig({
       {
         text: 'Tier 3 · Rare-Engineer Territory',
         items: withIcons(tier3),
+      },
+      {
+        text: 'Tier 4 · The Platform Frontier',
+        items: withIcons(tier4),
       },
     ],
     socialLinks: [

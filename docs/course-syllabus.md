@@ -1,19 +1,20 @@
 ---
 title: "Course Syllabus · From Silicon to the Screen"
-description: "The full curriculum, organized into three career-leverage tiers — from JS runtime internals and browser rendering to reactivity, compilers, performance engineering, and systems design."
+description: "The full curriculum, organized into four career-leverage tiers — from JS runtime internals and browser rendering to reactivity, compilers, performance engineering, systems design, and the platform frontier (WebAssembly, WebGPU, the edge, and browser security)."
 ---
 
 # Course Syllabus: Now I Understand How Software Systems Execute
 
 Let’s lay out a comprehensive curriculum that transforms a standard developer into an engineer who deeply understands execution from the silicon to the screen.
 
-Not every topic here has equal career value, so the curriculum is organized into **three tiers** by leverage. Work top-down: each tier assumes the one above it, and the module numbers run in tier order — Tier 1 is modules 1–4, Tier 2 is 5–8, Tier 3 is 9–12.
+Not every topic here has equal career value, so the curriculum is organized into **four tiers** by leverage. Work top-down: each tier assumes the one above it, and the module numbers run in tier order — Tier 1 is modules 1–4, Tier 2 is 5–8, Tier 3 is 9–12, Tier 4 is 13–16.
 
 | Tier | What it buys you | Modules |
 | :--- | :--- | :--- |
 | **1 · Non-Negotiable Foundation** | The bedrock every senior is assumed to have. Go until it’s intuitive. | 01 JS Runtime · 02 Browser as OS · 03 Performance Engineering · 04 Network Bridge |
 | **2 · The Differentiators** | Where market value rises sharply — most senior devs never go here. | 05 Reactivity · 06 Data Structures · 07 Compilers · 08 Build Systems |
 | **3 · Rare-Engineer Territory** | Build the things, read the masters, design the system. | 09 Build From Scratch · 10 Browser APIs · 11 Source-Reading · 12 Systems Design |
+| **4 · The Platform Frontier** | Push execution past the platform's defaults: another language, another processor, another runtime — and the security model that gates them. | 13 WebAssembly · 14 WebGPU & Compute · 15 Edge & Streaming · 16 Browser Security |
 
 ---
 
@@ -29,7 +30,7 @@ You must understand the exact scheduling order of macrotasks, microtasks, and th
 | Concept | Key Focus Areas | Practical Implication |
 | :--- | :--- | :--- |
 | **Concurrency** | [Microtask vs. Macrotask queues](https://html.spec.whatwg.org/multipage/webappapis.html#event-loops), Starvation scenarios | Predicting exact execution order of promises and timeouts. |
-| **Memory** | Stack vs. Heap, Garbage collection, Retainers | Identifying accidental memory leaks and detached DOM nodes. |
+| **Memory** | Stack vs. Heap, generational GC, Retainers, write barriers | Identifying leaks, detached DOM nodes, and observing collection with `FinalizationRegistry` without preventing it. |
 
 > **Self-Test:**
 >
@@ -112,10 +113,10 @@ This is where you bridge the gap between authoring code and executing it.
 ### Module 8: Build Systems
 The compiler turns one file into executable code; the build system orchestrates *thousands* of them — twice, with opposite strategies for dev and production.
 
-* **Module Resolution:** Bare specifiers, the `exports` field, ESM vs. CommonJS, and why the browser can’t resolve `import 'vue'` on its own.
+* **Module Resolution:** Bare specifiers, the `exports` field, ESM vs. CommonJS, why the browser can’t resolve `import 'vue'` on its own, and native **import maps** as the browser's own resolver.
 * **The Dev Server:** Vite’s native-ESM, transform-on-demand model; esbuild dependency pre-bundling ([`optimizeDeps`](https://vite.dev/guide/dep-pre-bundling.html)); why dev startup is O(1) in app size.
 * **HMR:** The module graph, accept boundaries ([`import.meta.hot`](https://vite.dev/guide/api-hmr.html)), and why component state survives an edit.
-* **Production Build:** Rollup, code splitting, tree shaking, and the dev/prod two-engine consistency tradeoff (and Rolldown’s push to unify them).
+* **Production Build:** Rollup, code splitting, tree shaking, the dev/prod two-engine consistency tradeoff (and Rolldown’s push to unify them), and **Module Federation** for sharing dependencies across separately-built apps at runtime.
 
 ---
 
@@ -153,3 +154,38 @@ Every module above answers *how does this execute?* This one answers the orthogo
 * **API Design:** Designing for the caller, Hyrum's Law, and the cost of breaking changes.
 * **State & Cache:** Single source of truth, derived vs. stored state, and cache invalidation as a correctness problem.
 * **Concurrency & Judgment:** Reasoning about invariants across `await`/yield points, and defending tradeoffs in writing (ADRs, one-way vs. two-way doors).
+
+---
+
+## Tier 4 · The Platform Frontier
+The first three tiers make you fluent in how the web platform executes *as given*. This tier is for the engineers who push past its defaults — running code that isn't JavaScript, on a processor that isn't the CPU, in a runtime that isn't the browser — and the security architecture that makes the platform willing to grant that power. Each frontier capability reopens a door the platform had to learn to guard; the throughline is *power and containment ship together*.
+
+### Module 13: WebAssembly & Systems Integration
+Execution past JavaScript: a typed stack machine compiled to near-native code.
+
+* **Execution & Engine:** The typed stack machine, one-pass validation, `Module` vs `Instance`, and the Liftoff→TurboFan tiers (why speed comes from static types, not AOT).
+* **Memory & Boundary:** Linear memory as one `ArrayBuffer`, `memory.grow` detaching views, WasmGC, and the real JS↔Wasm cost — numbers are cheap, strings/objects pay an encode + `memcpy`.
+* **Porting Native Code:** Compile a Rust kernel to Wasm; allocate the buffer once and pass a pointer, not the data — and why `wasm-bindgen` automates that copy rather than removing it.
+* **Threads & Beyond:** `SharedArrayBuffer` + atomics (requires cross-origin isolation — Module 16), SIMD, WASI, and the Component Model.
+
+### Module 14: WebGPU & Compute Shaders
+Execution past the CPU: thousands of lanes running the same instruction over different data.
+
+* **The GPU Model:** SIMT/data-parallel execution; why branch divergence and low arithmetic intensity kill the win.
+* **The Pipeline:** `navigator.gpu` → adapter → device → queue; buffers, usage flags, and bind groups.
+* **Compute Shaders (WGSL):** Workgroups, `@workgroup_size`, `global_invocation_id`, and sizing `dispatchWorkgroups` correctly.
+* **The Readback Wall:** Why a `STORAGE` buffer needs a `MAP_READ` staging copy, and why reading results back dominates a small job. WebGPU vs Workers (M10) vs Wasm (M13).
+
+### Module 15: Edge Runtimes & Streaming
+Execution past the browser: code running in V8 isolates near the user, streamed back progressively.
+
+* **Isolates vs Processes:** Why edge runtimes use V8 isolates (millisecond cold starts, density) instead of Node processes, and the constraint surface that forces (no `fs`, Web-standard APIs, CPU-time caps).
+* **Chunked Transfer Encoding:** Streaming a response body before its length is known; TTFB vs renderable bytes.
+* **Streaming SSR & RSC:** Flushing the shell while awaiting data, Suspense boundaries as flush points, and serializing the React tree to the RSC wire payload.
+
+### Module 16: Browser Security Architecture
+Platform-level security as an architecture, derived from the attacks that forced it.
+
+* **Process Model & Spectre:** Site isolation as memory separation; why speculative execution + a cache side channel made multi-process mandatory.
+* **Cross-Origin Isolation:** How COOP + COEP (+ CORP) earn back `SharedArrayBuffer` and high-resolution timers (the precondition Modules 10 and 13 require).
+* **Trusted Types & CSP:** Killing DOM-based XSS at the sink, and layering a strict, nonce-based CSP — complementary, not interchangeable.
