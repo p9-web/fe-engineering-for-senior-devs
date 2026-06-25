@@ -20,6 +20,8 @@ learn:
     - "stack vs heap"
     - "Smi vs HeapNumber"
     - "generational garbage collection"
+    - "write barriers & remembered sets"
+    - "FinalizationRegistry / WeakRef"
     - "hidden classes"
     - "inline caching"
     - "Proxy"
@@ -27,7 +29,7 @@ learn:
     - "setTimeout(fn, 0) means 'soon'"
     - "await yields control immediately"
     - "reading offsetHeight is cheap"
-  selfTests: 4
+  selfTests: 5
   primarySources:
     - "V8"
     - "Chrome Orinoco GC"
@@ -110,6 +112,16 @@ A closure happens when a function "remembers" its lexical scope even after the o
 > function remember(node) { cache.set(node, computeExpensiveThing(node)) }
 > ```
 > The `Map` holds a *strong* key reference, so every `node` ever passed in stays alive forever — even after it's removed from the DOM. Swap `Map` for `WeakMap`: keys become weakly held, and entries vanish when the node is otherwise unreachable. (This is exactly the structure Vue uses for dependency tracking — see Module 6.)
+
+### Watching the Collector (Without Stopping It)
+You can't *control* when V8 collects, but you can *observe* and *measure* — carefully.
+
+* **`FinalizationRegistry` as a GC probe, not a hook:** register an object with a callback and you'll be told *after* it's reclaimed. Useful for detecting leaks ("this cache entry should have been collected and never was") — but the timing is non-deterministic, callbacks may be **coalesced, delayed, or never fire** (e.g. on page teardown), and they run as a separate job. Treat them as observability, never as logic — freeing a socket or releasing a lock in a finalizer is a bug, because "eventually, maybe" is not a guarantee.
+* **Measuring the heap:** `performance.measureUserAgentSpecificMemory()` returns a breakdown of your tab's memory (DOM, JS, workers) — but it requires **cross-origin isolation** (the `COOP`/`COEP` headers of Module 16), precisely because a precise memory oracle is a side-channel risk. In DevTools, the three-snapshot technique (Module 3) is still the day-to-day tool for *finding* the retainer chain.
+* **Write barriers — why mutation isn't free:** generational GC only works if a young-gen scavenge can run *without* tracing the whole old generation. So V8 keeps a **remembered set** of old→young pointers, and every time you store a young object into an *old* one, a **write barrier** fires to record it. The practical cost: a long-lived cache or store that you constantly mutate to point at fresh objects isn't just allocating — each write pays barrier overhead and grows the set the next minor GC must scan. Steady-state churn in old-gen containers has a price even when nothing is "leaking."
+
+> **Self-Test:**
+> You add a `FinalizationRegistry` to close a `WebSocket` "when its wrapper object is collected," and connections sometimes leak for minutes or never close. Why is this the wrong tool, and where should the cleanup live? *(Finalizer timing is non-deterministic — V8 may delay or skip the callback entirely, and it certainly won't run promptly, so a resource whose release matters can stay open indefinitely. Deterministic cleanup belongs in explicit lifecycle code: a `close()`/`dispose()` method, `try/finally`, or a framework unmount hook. `FinalizationRegistry` is for *detecting* that something wasn't cleaned up, not for doing the cleanup.)*
 
 ## 3. JavaScript Engine Internals (V8)
 JavaScript engines don't simply "interpret" or "compile" — they do both, in tiers, and move hot code up the tiers at runtime.

@@ -15,12 +15,14 @@ learn:
     - "Name the structural reasons a feature works in dev but breaks in the build"
   concepts:
     - "module resolution (exports field, conditions, bare specifiers)"
+    - "import maps (browser-native specifier resolution)"
     - "native-ESM dev server (transform on demand)"
     - "dependency pre-bundling (optimizeDeps)"
     - "why esbuild is fast (native, parallel, single-pass)"
     - "HMR (module graph, accept boundaries)"
     - "Rollup production build"
     - "code splitting"
+    - "module federation (runtime dependency sharing)"
     - "tree shaking (side-effect hints)"
     - "the asset graph"
     - "the two-engine dev/prod consistency gap"
@@ -30,7 +32,8 @@ learn:
     - "the dev server bundles your app (Vite serves your code unbundled over native ESM; only dependencies are pre-bundled)"
     - "esbuild is fast because it skips GC (it is native code + parallelism + minimal AST passes)"
     - "HMR just reloads the changed file (it walks the graph up to an accept boundary; no boundary means a full reload)"
-  selfTests: 3
+    - "Module Federation is build-time linking (it resolves and shares remotes at runtime, so version skew is a production failure)"
+  selfTests: 4
   primarySources:
     - "Vite"
     - "esbuild"
@@ -50,6 +53,7 @@ Before anything executes, every `import` specifier must resolve to a concrete fi
 * **Relative (`./util.js`) and absolute (`/src/util.js`):** Resolved against the importer's path. The browser's native ESM loader does exactly this and nothing more — which is why bare specifiers fail in the browser.
 * **Bare specifiers (`import { ref } from 'vue'`):** Have *no* meaning to the browser. Node's resolution algorithm walks up `node_modules`, reads the package's `package.json`, and consults the **[`exports` field](https://nodejs.org/api/packages.html#exports)** — the modern entry map that replaced `main`. `exports` also encodes **[conditions](https://nodejs.org/api/packages.html#conditional-exports)**: `import` vs `require`, `browser` vs `node`, `development` vs `production`. The same specifier can resolve to different files depending on who's asking. This is the part seniors most often get wrong: `exports` is a *firewall* — if a subpath isn't listed, it's unreachable, even if the file exists on disk.
 * **Extension & directory resolution:** `./util` → `./util.ts` → `./util/index.ts`. Cheap to write, but every guess is a filesystem `stat`. A bundler caches these; the browser can't, which feeds directly into the dev-server design below.
+* **Import maps — the browser's own resolver:** The browser can't resolve `import 'vue'` by itself, but [import maps](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/script/type/importmap) let you teach it to. A `<script type="importmap">` declares a JSON map from bare specifiers to URLs, so `import 'vue'` resolves to a real (often CDN) URL with **no bundler in the loop** — the native counterpart to Node's `node_modules` walk, and the basis of no-build and ESM-CDN workflows (and of distributed-frontend sharing, §5). The limits are the flip side of skipping the build: no tree shaking, no transform, and a deep dependency still fans out into a request waterfall — the exact problem `optimizeDeps` (§2) exists to solve.
 
 > **Self-Test:**
 > A package's file exists at `node_modules/lib/dist/secret.js`, but `import 'lib/secret'` throws [`ERR_PACKAGE_PATH_NOT_EXPORTED`](https://nodejs.org/api/packages.html#subpath-exports). Why, when the file is right there? (The package ships an `exports` map that doesn't list the `./secret` subpath. `exports` is an allowlist — unlisted subpaths are sealed off regardless of what's on disk. The fix is the package author's, not yours.)
@@ -84,6 +88,10 @@ In production you *do* want one optimized bundle (or a few), because HTTP reques
 * **Code splitting:** Every dynamic `import()` becomes a **[split point](https://rollupjs.org/tutorial/#code-splitting)** — its own chunk, fetched on demand (route-level lazy loading is just this). Rollup also **hoists modules shared by multiple chunks** into a common chunk so they aren't duplicated, balancing request count against cache reuse.
 * **Tree shaking:** Rollup drops unreferenced ESM exports, gated by the side-effect hints from Module 7 (`"sideEffects": false`, `/*#__PURE__*/`). See [Module 7](/module-7-compilers) for why ESM is statically shakeable and CommonJS is not.
 * **Asset graph:** `import './styles.css'` and `import logo from './logo.png'` are treated as graph nodes too — extracted, hashed for cache-busting, and rewritten to final URLs.
+* **Sharing across separately-built apps (Module Federation):** Code splitting divides *one* build; [Module Federation](https://module-federation.io/) shares code across *independently built and deployed* apps at **runtime**. A **host** loads a **remote**'s exposed modules over the network, and the two negotiate **shared singletons** — so two separately-shipped apps run *one* copy of React, not two, by agreeing on a version at load time. This is the runtime backbone of micro-frontends (Webpack's `ModuleFederationPlugin`, or Vite's native-federation built on the import maps of §1). The cost is the tradeoff Module 12 names: runtime coupling between deploys you no longer build together — a shared-dependency version skew becomes a *production* failure, not a build error. It buys org-scale team autonomy at the price of a new failure surface.
+
+> **Self-Test:**
+> Two micro-frontends built by different teams both depend on React, yet the shell loads only one copy. What mechanism made that happen, and what class of bug does it introduce that a single monolithic build never had? *(Module Federation's **shared singleton** negotiation: host and remote both declare React as `shared`, and at load time they agree on one instance instead of each bundling its own. The new failure mode is runtime version skew — ship incompatible React versions and there's no build step to catch it; hooks/context break only in production when the federated remote actually loads. Independent deploys trade build-time safety for runtime coupling.)*
 
 ## 6. The Two-Engine Consistency Tradeoff
 Dev uses native ESM + esbuild; production uses Rollup. Same source, two pipelines — and they can **disagree**. A module-execution-order edge case, a CSS-injection timing difference, or a dependency that behaves differently bundled vs. unbundled can produce "works in dev, breaks in build." This is the structural weakness of the fast-dev-server approach.
