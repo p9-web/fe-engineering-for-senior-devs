@@ -1,10 +1,10 @@
 ---
 title: "Module 12 · Systems Design & Complexity Management"
-description: "The orthogonal axis to execution: coupling vs cohesion, abstraction boundaries, API design, state propagation, cache invalidation, concurrency reasoning, and tradeoff judgment."
+description: "The orthogonal axis to execution: coupling vs cohesion, abstraction boundaries, API design, state propagation, cache invalidation, concurrency reasoning, tradeoff judgment, and the economics of change."
 learn:
   module: 12
   level: advanced
-  timeRequired: PT50M
+  timeRequired: PT55M
   prerequisites:
     - "the execution mechanisms from modules 1–11"
     - "source reading & technical judgment (module 11)"
@@ -13,6 +13,7 @@ learn:
     - "Name the coupling in a change that ripples across modules, and propose the boundary that contains it"
     - "Treat cache invalidation as a correctness problem, not a performance tweak"
     - "Defend an architecture tradeoff in writing (an ADR) instead of by assertion"
+    - "Explain in economic terms why change gets more expensive over time, and name the strategic investment that bends the curve"
   concepts:
     - "coupling vs cohesion & change amplification"
     - "abstraction boundaries & leaky abstractions"
@@ -22,15 +23,19 @@ learn:
     - "cache invalidation as a correctness problem"
     - "concurrency reasoning: invariants across await/yield points"
     - "tradeoff analysis, ADRs/RFCs, one-way vs two-way doors"
+    - "maintainability economics: tactical vs strategic programming, cost of change"
+    - "complexity is incremental (change amplification, cognitive load, unknown unknowns)"
   misconceptions:
     - "more abstraction is better design (the wrong boundary couples more than none)"
     - "DRY always wins (deduplicating incidental similarity creates coupling)"
     - "you can design the system correctly up front (you design for change, not prediction)"
-  selfTests: 3
+    - "working code is the deliverable (the changeable codebase is the asset; all debt is bad — only silent, accidental debt compounds)"
+  selfTests: 4
   primarySources:
     - "Parnas, 'On the Criteria To Be Used in Decomposing Systems into Modules'"
     - "Hyrum's Law"
     - "real ADRs and Vue/React/Rust RFCs"
+    - "Ousterhout, 'A Philosophy of Software Design'"
   teachingApproach: "Treat complexity as the real cost; for each principle, show the failure it prevents three years out."
 ---
 
@@ -42,7 +47,7 @@ Every other module in this curriculum answers one question: *how does this execu
 Almost every design principle is a special case of this one.
 
 * **Coupling** is how much one part must know about another. **Cohesion** is how much a part's own pieces belong together. You want low coupling, high cohesion.
-* The real cost of coupling is **change amplification**: one logical change forces edits in N places. When a one-line product change touches seven files, the design — not the change — is wrong.
+* The real cost of coupling is **change amplification**: one logical change forces edits in N places. When a one-line product change touches seven files, the design — not the change — is wrong. Coupling is the multiplier on the cost of every future change — the quantity §8 turns into an economic argument.
 * **Misconception — "DRY always wins."** Deduplicating code that is *incidentally* identical couples two things that will later need to change for different reasons. The shared helper that served the checkout page and the admin page becomes a knot the day they diverge. Prefer the **Rule of Three**, and remember: a little duplication is far cheaper than the wrong abstraction.
 
 > **Self-Test:**
@@ -101,3 +106,16 @@ The capstone skill, and the one that compounds: being the engineer who can say *
 
 > **Self-Test:**
 > You're choosing between a shared global store and prop-drilling for a new feature, and the team wants a decision in the standup. What makes this an ADR-worthy moment, and what must the ADR contain to be worth writing? (It shapes state ownership — closer to a one-way door than a two-way one, since unwinding a global store later is expensive. A worthwhile ADR states the context and constraints, the alternatives with their coupling/complexity tradeoffs, the decision, and the conditions under which you'd revisit it — so the choice is defensible and the next engineer inherits the *reasoning*, not just the result.)
+
+## 8. The Economics of Change — Why Any of This Pays
+Every principle above is an *investment*, and this section is the model that says when it's worth making. Without it, "good design" sounds like taste; with it, you can defend the boundary you drew in a standup with a number, not an adjective.
+
+* **Complexity is incremental** (Ousterhout). No single shortcut wrecks a codebase — each "I'll just special-case this here" feels free at the call site. The cost is the *sum*: a thousand free-feeling decisions become the system no one dares change. This is why you can't fix it later in one pass; it didn't arrive in one pass.
+* **The cost of a change ≈ how many modules you must understand and touch to make it safely.** That product is what §1's coupling actually prices — coupling is the *multiplier* on every future change, which is why it's the master variable. A change that is "two lines, but you must hold six modules in your head to be sure it's safe" is an expensive change wearing a cheap diff.
+* **Tactical vs strategic programming** (Ousterhout). *Tactical*: make the feature work, complexity be damned. *Strategic*: spend a standing ~10–20% keeping the design clean — extracting the boundary, deleting the special case. The strategic tax feels like it slows you down; it's the only thing that keeps you fast, because it's the only payment that earns *compounding* interest. Pure tactical programming is borrowing against a loan whose statement never arrives.
+* **Not all debt is bad — silent debt is.** A *deliberate, written* tradeoff (the two-way door of §7) is a loan you took with eyes open and can repay on schedule. *Accidental, undocumented* debt — the coupling no one named, the cache with no staleness budget (§5) — compounds in the dark until the interest exceeds the principal.
+
+The deliverable was never the code that runs today; AI can produce that on demand. The asset is a codebase that stays *cheap to change* — and complexity is just the name for everything that raises that price.
+
+> **Self-Test:**
+> A feature that took two days in year one takes two weeks in year three, on the same team. The code isn't slower and the engineers aren't worse — what got expensive, in this module's terms, and what earlier investment would have bent the curve? (Nothing about the *feature* changed; the **cost of change** rose. The slowdown is accrued complexity surfacing as change amplification (§1), cognitive load — more you must hold in your head before a change is safe — and unknown unknowns: you can't tell what a change will break. It compounded because each tactical shortcut raised the baseline for the next. The curve bends with strategic investment paid *continuously* — boundaries around what changes (§2), one source of truth so facts don't drift (§4) — not a year-three "big refactor," which is just repaying the whole loan at once, with penalties.)
