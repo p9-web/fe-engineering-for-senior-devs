@@ -16,19 +16,20 @@ const DOCS_DIR = fileURLToPath(new URL('..', import.meta.url)) // docs/.vitepres
 const tier1 = [
   { text: '01 · JS Runtime', link: '/module-1-js-runtime' },
   { text: '02 · Browser as OS', link: '/module-2-browser-os' },
-  { text: '03 · Network Bridge', link: '/module-3-network-bridge' },
+  { text: '03 · Performance Engineering', link: '/module-3-performance-engineering' },
+  { text: '04 · Network Bridge', link: '/module-4-network-bridge' },
 ]
 const tier2 = [
-  { text: '04 · Reactivity', link: '/module-4-reactivity' },
-  { text: '05 · Data Structures', link: '/module-5-data-structures' },
-  { text: '06 · Compilers & ASTs', link: '/module-6-compilers' },
-  { text: '07 · Build Systems', link: '/module-7-build-systems' },
+  { text: '05 · Reactivity', link: '/module-5-reactivity' },
+  { text: '06 · Data Structures', link: '/module-6-data-structures' },
+  { text: '07 · Compilers & ASTs', link: '/module-7-compilers' },
+  { text: '08 · Build Systems', link: '/module-8-build-systems' },
 ]
 const tier3 = [
-  { text: '08 · Build From Scratch', link: '/module-8-build-things' },
-  { text: '09 · Source-Reading', link: '/module-9-source-code-judgment' },
-  { text: '10 · WebAssembly', link: '/module-10-wasm' },
-  { text: '11 · Browser APIs', link: '/module-11-browser-apis' },
+  { text: '09 · Build From Scratch', link: '/module-9-build-things' },
+  { text: '10 · Browser APIs', link: '/module-10-browser-apis' },
+  { text: '11 · Source-Reading', link: '/module-11-source-code-judgment' },
+  { text: '12 · Systems Design', link: '/module-12-systems-design' },
 ]
 
 // Only modules whose source page actually exists are schema'd / linked.
@@ -111,6 +112,7 @@ function learningResourceLd(title: string, description: string, url: string, lea
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
   base: '/fe-engineering-for-senior-devs/', // GitHub Pages project-site subpath
+  srcExclude: ['archive/**'], // archived modules (e.g. WebAssembly): kept in repo + git history, not built or listed
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
   appearance: 'dark', // terminal theme is dark-first; toggle preserved

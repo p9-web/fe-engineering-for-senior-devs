@@ -109,7 +109,7 @@ A closure happens when a function "remembers" its lexical scope even after the o
 > const cache = new Map()
 > function remember(node) { cache.set(node, computeExpensiveThing(node)) }
 > ```
-> The `Map` holds a *strong* key reference, so every `node` ever passed in stays alive forever — even after it's removed from the DOM. Swap `Map` for `WeakMap`: keys become weakly held, and entries vanish when the node is otherwise unreachable. (This is exactly the structure Vue uses for dependency tracking — see Module 5.)
+> The `Map` holds a *strong* key reference, so every `node` ever passed in stays alive forever — even after it's removed from the DOM. Swap `Map` for `WeakMap`: keys become weakly held, and entries vanish when the node is otherwise unreachable. (This is exactly the structure Vue uses for dependency tracking — see Module 6.)
 
 ## 3. JavaScript Engine Internals (V8)
 JavaScript engines don't simply "interpret" or "compile" — they do both, in tiers, and move hot code up the tiers at runtime.
@@ -155,7 +155,7 @@ u.greet()
 
 Add `greet` directly onto some instances but not others and you mint extra shapes — the call site goes polymorphic and the cached prototype lookup is lost. Prototype methods are fast *because* shapes stay stable.
 
-* **Getters, Setters, and Proxies:** Modern frameworks (like Vue.js) rely on `Proxy` to intercept object operations (`get`, `set`, `has`, `deleteProperty`). This is what lets the framework automatically track dependencies and trigger UI updates whenever reactive state changes — the mechanism dissected in Module 4.
+* **Getters, Setters, and Proxies:** Modern frameworks (like Vue.js) rely on `Proxy` to intercept object operations (`get`, `set`, `has`, `deleteProperty`). This is what lets the framework automatically track dependencies and trigger UI updates whenever reactive state changes — the mechanism dissected in Module 5.
 
 > **Self-Test:**
 > A `Proxy`'s `get` trap fires on *every* read. What does that imply for the cost of a deeply nested reactive object that you read in a hot loop — and why does Vue 3 make reactivity *lazy* (only proxying nested objects when you actually access them)? *(Each property hop runs trap code instead of a raw load, so reading `a.b.c.d` in a loop multiplies trap overhead by depth × iterations — cache the leaf in a local. Lazy proxying means Vue pays to wrap a nested object only the first time you touch it, so a large state tree you never read costs nothing.)*

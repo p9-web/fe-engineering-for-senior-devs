@@ -1,8 +1,8 @@
 ---
-title: "Module 9 · Source Reading & Technical Judgment"
+title: "Module 11 · Source Reading & Technical Judgment"
 description: "Reading unfamiliar source by execution, not file order: entry-point tracing, git archaeology, and writing benchmarks the JIT can't fool."
 learn:
-  module: 9
+  module: 11
   level: advanced
   timeRequired: PT30M
   prerequisites:
@@ -34,7 +34,7 @@ learn:
   teachingApproach: "Pick a real question, then show the fastest path through the source that answers it."
 ---
 
-# Module 9: Source Code Reading & Technical Judgment
+# Module 11: Source Code Reading & Technical Judgment
 
 Advanced engineering is not just writing code; it is reading it, understanding the historical context of its design, and communicating those concepts. This module is about turning the mechanisms from Modules 1–6 into *judgment*.
 
@@ -46,7 +46,7 @@ Advanced engineering is not just writing code; it is reading it, understanding t
 * **Follow one value end-to-end** — and not always in the reactivity layer:
   * *Vue:* how does `ref(0)` reach a DOM text node? `ref` → `RefImpl.get value` → `track` → effect → scheduler → patch.
   * *Vite:* how does `import x from 'lodash'` get resolved in dev? A bare specifier like `lodash` is first **pre-bundled by esbuild** (`optimizeDeps`) into a single ESM file under `node_modules/.vite/deps`, then served from there; your own source flows through the plugin pipeline — `resolveId` (specifier → file path) → `load` → `transform` (rewrite imports) → dev server. This shows the *plugin-hook* architecture (and the esbuild pre-bundle step) that the reactivity trace never touches.
-* **Set a breakpoint in `node_modules`.** Source maps (Module 6) let you step into the real library code from your own app in DevTools. Watching the actual call stack beats reading.
+* **Set a breakpoint in `node_modules`.** Source maps (Module 7) let you step into the real library code from your own app in DevTools. Watching the actual call stack beats reading.
 * **Use git as archaeology.** `git blame` and the PR that introduced a line tell you *why* it exists. A weird-looking workaround usually has a linked issue explaining the bug it fixes — design intent lives in history, not the file.
 
 > **Self-Test:**
@@ -57,7 +57,7 @@ Reading source tells you *how* something works; only measurement tells you wheth
 
 * **Don't trust, measure.** "Signals are faster than VDOM" is a claim about a workload, not a law. Profile the real one (Module 2).
 * **Microbenchmark traps — know which layer bites you:**
-  * The killer is usually the **optimizing JIT at runtime** (Module 1), not bundler dead-code elimination (that's build-time, Module 6). If a benchmark's result is never consumed, the optimizer may prove the computation dead and delete it, hoist it out of the loop (**loop-invariant code motion**), or inline it away — so you time something other than what you meant. Defeat it with a *sink*: accumulate results into a `blackhole` variable you print at the end.
+  * The killer is usually the **optimizing JIT at runtime** (Module 1), not bundler dead-code elimination (that's build-time, Module 7). If a benchmark's result is never consumed, the optimizer may prove the computation dead and delete it, hoist it out of the loop (**loop-invariant code motion**), or inline it away — so you time something other than what you meant. Defeat it with a *sink*: accumulate results into a `blackhole` variable you print at the end.
   * **Warm up.** Cold runs measure Ignition/Sparkplug, not TurboFan. Loop enough to reach steady state, then measure.
   * **Timer resolution lies.** `performance.now()` is deliberately **clamped/jittered** (a Spectre mitigation — ~100µs in Chrome, finer only in cross-origin-isolated contexts), so sub-millisecond single-shot timings are noise. Measure many iterations and divide.
 
@@ -70,7 +70,7 @@ Reading source tells you *how* something works; only measurement tells you wheth
 > ```
 > *(Because nothing consumes `Math.sqrt(i)`, the optimizer may eliminate or hoist the body — so the number is meaningless: near-zero, or just timer noise, not real work. Fix: `sum += Math.sqrt(i)` and `console.log(sum)` so the computation is observable and can't be dropped.)*
 
-* **Evaluating a dependency is judgment too — make it concrete:** does it tree-shake (ESM + `"sideEffects": false`, Module 6)? `grep` your codebase for the export surface you *actually* use — often it's two functions of a 50KB lib. Open the dep's own `node_modules` to see its transitive weight. And the real question: *if this breaks in two years, can my team own it?*
+* **Evaluating a dependency is judgment too — make it concrete:** does it tree-shake (ESM + `"sideEffects": false`, Module 7)? `grep` your codebase for the export surface you *actually* use — often it's two functions of a 50KB lib. Open the dep's own `node_modules` to see its transitive weight. And the real question: *if this breaks in two years, can my team own it?*
 
 ## 3. Communicating Technical Judgment
 Knowledge is useless if you can't leverage it to guide a team. You want to be the engineer who can credibly say, "This architecture will fail in 18 months because state-propagation complexity is wrong" — and back it.
