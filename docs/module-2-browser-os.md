@@ -1,3 +1,41 @@
+---
+title: "Module 2 · The Browser as an Operating System"
+description: "How the browser renders: multi-process architecture, the DOM→layout→paint→composite pixel pipeline, the 16.67ms frame budget, and why layout thrashing is costly."
+learn:
+  module: 2
+  level: advanced
+  timeRequired: PT35M
+  prerequisites:
+    - "HTML/CSS fundamentals"
+    - "the event loop's render step (module 1)"
+    - "DOM basics"
+  outcomes:
+    - "Explain why transform/opacity animate on the compositor while top/left re-run layout"
+    - "Budget work to fit inside a 16.67ms frame"
+    - "Spot and remove a forced synchronous layout (layout thrashing)"
+  concepts:
+    - "multi-process architecture"
+    - "site isolation"
+    - "the pixel pipeline (DOM, CSSOM, style, layout, paint, composite)"
+    - "render-blocking CSS"
+    - "the compositor thread"
+    - "transform/opacity vs layout properties"
+    - "the 16.67ms frame budget"
+    - "requestAnimationFrame"
+    - "forced reflow / layout thrashing"
+    - "Interaction to Next Paint (INP)"
+  misconceptions:
+    - "CSS blocks the HTML parser (it is render-blocking, not parser-blocking)"
+    - "every CSS change costs the same (transform/opacity skip layout & paint)"
+    - "reading offsetHeight is free"
+  selfTests: 2
+  primarySources:
+    - "Chromium / Blink"
+    - "Chrome compositor"
+    - "DevTools performance panel"
+  teachingApproach: "Trace one frame through the pixel pipeline, then show which property edits re-enter which stage."
+---
+
 # Module 2: Understand the Browser Like an Operating System
 
 To write high-performance applications, you must know what the browser is doing every millisecond. The browser is not just a document viewer; it is a multi-process operating system that schedules work, isolates memory, and arbitrates the GPU.

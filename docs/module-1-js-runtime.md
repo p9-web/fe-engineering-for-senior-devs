@@ -1,3 +1,39 @@
+---
+title: "Module 1 · JavaScript at the Runtime Level"
+description: "How JS actually runs: exact event-loop scheduling, microtask vs macrotask ordering, V8 hidden classes, inline caching, and generational GC — for senior devs."
+learn:
+  module: 1
+  level: advanced
+  timeRequired: PT45M
+  prerequisites:
+    - "closures"
+    - "promises & async/await"
+    - "basic V8 / runtime familiarity"
+  outcomes:
+    - "Predict the exact order of microtasks, macrotasks, and render steps"
+    - "Explain why await suspends as a microtask and what that breaks"
+    - "Diagnose hidden-class deopts and detached-DOM memory leaks"
+  concepts:
+    - "event loop"
+    - "microtask vs macrotask queue"
+    - "async/await desugaring"
+    - "stack vs heap"
+    - "Smi vs HeapNumber"
+    - "generational garbage collection"
+    - "hidden classes"
+    - "inline caching"
+    - "Proxy"
+  misconceptions:
+    - "setTimeout(fn, 0) means 'soon'"
+    - "await yields control immediately"
+    - "reading offsetHeight is cheap"
+  selfTests: 4
+  primarySources:
+    - "V8"
+    - "Chrome Orinoco GC"
+  teachingApproach: "Lead with the execution trace, then reveal the rule it forces."
+---
+
 # Module 1: Master JavaScript at the Runtime Level
 
 ## 1. The Event Loop & Concurrency Model
@@ -73,7 +109,7 @@ A closure happens when a function "remembers" its lexical scope even after the o
 > const cache = new Map()
 > function remember(node) { cache.set(node, computeExpensiveThing(node)) }
 > ```
-> The `Map` holds a *strong* key reference, so every `node` ever passed in stays alive forever — even after it's removed from the DOM. Swap `Map` for `WeakMap`: keys become weakly held, and entries vanish when the node is otherwise unreachable. (This is exactly the structure Vue uses for dependency tracking — see Module 4.)
+> The `Map` holds a *strong* key reference, so every `node` ever passed in stays alive forever — even after it's removed from the DOM. Swap `Map` for `WeakMap`: keys become weakly held, and entries vanish when the node is otherwise unreachable. (This is exactly the structure Vue uses for dependency tracking — see Module 5.)
 
 ## 3. JavaScript Engine Internals (V8)
 JavaScript engines don't simply "interpret" or "compile" — they do both, in tiers, and move hot code up the tiers at runtime.
@@ -119,7 +155,7 @@ u.greet()
 
 Add `greet` directly onto some instances but not others and you mint extra shapes — the call site goes polymorphic and the cached prototype lookup is lost. Prototype methods are fast *because* shapes stay stable.
 
-* **Getters, Setters, and Proxies:** Modern frameworks (like Vue.js) rely on `Proxy` to intercept object operations (`get`, `set`, `has`, `deleteProperty`). This is what lets the framework automatically track dependencies and trigger UI updates whenever reactive state changes — the mechanism dissected in Module 3.
+* **Getters, Setters, and Proxies:** Modern frameworks (like Vue.js) rely on `Proxy` to intercept object operations (`get`, `set`, `has`, `deleteProperty`). This is what lets the framework automatically track dependencies and trigger UI updates whenever reactive state changes — the mechanism dissected in Module 4.
 
 > **Self-Test:**
 > A `Proxy`'s `get` trap fires on *every* read. What does that imply for the cost of a deeply nested reactive object that you read in a hot loop — and why does Vue 3 make reactivity *lazy* (only proxying nested objects when you actually access them)? *(Each property hop runs trap code instead of a raw load, so reading `a.b.c.d` in a loop multiplies trap overhead by depth × iterations — cache the leaf in a local. Lazy proxying means Vue pays to wrap a nested object only the first time you touch it, so a large state tree you never read costs nothing.)*

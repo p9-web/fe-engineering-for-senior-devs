@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import DefaultTheme from 'vitepress/theme-without-fonts'
+import StudyGuide from './StudyGuide.vue'
 
 const { Layout } = DefaultTheme
 </script>
 
 <template>
   <Layout>
+    <!-- learning scaffold above the content (renders only when the page has a `learn:` block) -->
+    <template #doc-before>
+      <StudyGuide />
+    </template>
     <!-- terminal status line at the foot of every doc page -->
     <template #doc-footer-before>
       <div class="terminal-status">from silicon to the screen</div>

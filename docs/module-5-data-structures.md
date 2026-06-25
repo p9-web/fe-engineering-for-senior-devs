@@ -1,11 +1,48 @@
-# Module 4: Practical Data Structures & Algorithms
+---
+title: "Module 5 · Practical Data Structures & Algorithms"
+description: "The data structures inside frameworks: LIS-based list diffing, min-heap schedulers, Fiber's linked list, lane bitmasks, and radix-tree routing — and why each was chosen."
+learn:
+  module: 5
+  level: advanced
+  timeRequired: PT40M
+  prerequisites:
+    - "Smi & hidden classes (module 1)"
+    - "reactivity & diffing (module 4)"
+    - "Big-O fundamentals"
+  outcomes:
+    - "Explain why a framework picks a min-heap, linked list, or radix tree for a constraint"
+    - "Compute the node-move cost of an LIS-based list diff"
+    - "Reason about lane bitmask capacity and why bit 31 deopts"
+  concepts:
+    - "keyed list diffing via longest increasing subsequence"
+    - "WeakMap-keyed reactivity storage"
+    - "hash tables vs hidden classes"
+    - "Fiber as a linked-list tree"
+    - "min-heap task scheduler"
+    - "React lanes (bitmasks)"
+    - "radix-tree routing"
+    - "DAG propagation in signals"
+    - "topological ordering"
+  misconceptions:
+    - "a list diff moves N−1 nodes (LIS keeps the stable subsequence in place)"
+    - "a sorted array is the best scheduler (a min-heap wins on insert + peek-min)"
+    - "all 32 bits are usable for lane bitmasks (bit 31 deopts out of Smi range)"
+  selfTests: 3
+  primarySources:
+    - "Vue runtime-core (patchKeyedChildren)"
+    - "React Fiber & scheduler"
+    - "find-my-way (Fastify router)"
+  teachingApproach: "Name the framework constraint first, then derive the structure the constraint forces."
+---
+
+# Module 5: Practical Data Structures & Algorithms
 
 Forget the whiteboard interview questions. In the context of browser and framework execution, data structures are pragmatic tools chosen to solve specific performance and memory problems. Every choice below is taken from real framework source.
 
 ## 1. Trees & the Keyed Diff (Virtual DOM)
 The DOM is hierarchical, so any Virtual DOM representation is a tree. Each node holds its type, props, children, and text.
 
-* **Why O(n) not O(n³):** General tree-edit distance is O(n³). Frameworks cheat with heuristics — same position + same type = reuse; `key` identifies stable children — to get linear diffing fast enough for 60 FPS (the type-change failure mode is in Module 3).
+* **Why O(n) not O(n³):** General tree-edit distance is O(n³). Frameworks cheat with heuristics — same position + same type = reuse; `key` identifies stable children — to get linear diffing fast enough for 60 FPS (the type-change failure mode is in Module 4).
 * **The actual algorithm (Vue):** Vue's `patchKeyedChildren` first runs cheap **two-ended fast paths** — syncing matching nodes inward from the start and from the end — which handles the common append/prepend/replace cases in O(n). Only for the *unknown middle* that's left does it compute the **Longest Increasing Subsequence** of the nodes that kept their relative order, and move only the nodes *not* in that subsequence. The LIS step is real O(n log n) (patience sorting), lifted straight from `runtime-core`, and it minimizes DOM moves — the most expensive operation.
 
 > **Self-Test:**
@@ -52,10 +89,10 @@ How does a router match `/users/42/posts` against hundreds of route patterns wit
 > You have 5,000 registered routes. With a linear list of regexes, matching one URL is O(routes). With a radix tree it's O(path segments). For `/a/b/c`, roughly how many node comparisons does the radix tree do — and why doesn't adding the 5,001st route change that number?
 
 ## 6. Graphs (Dependency Propagation)
-Signals and fine-grained reactivity (Module 3) form **Directed Acyclic Graphs**.
+Signals and fine-grained reactivity (Module 4) form **Directed Acyclic Graphs**.
 
 * **Nodes & edges:** Signals and computeds are nodes; "reads from" relationships are edges.
-* **Topological propagation:** When a root signal changes, the system must update a computed only **after** all of its upstream inputs are settled — otherwise it produces a *glitch* (the diamond problem from Module 3). Topological ordering, dirty-flagging, and lazy pull-on-read are the three tools that prevent it.
+* **Topological propagation:** When a root signal changes, the system must update a computed only **after** all of its upstream inputs are settled — otherwise it produces a *glitch* (the diamond problem from Module 4). Topological ordering, dirty-flagging, and lazy pull-on-read are the three tools that prevent it.
 
 > **Self-Test:**
 > In the diamond `A → {B, C} → D`, you update `A`. Which traversal order guarantees `D` computes exactly once with both fresh inputs — depth-first or a topological sort that defers `D` until both `B` and `C` are marked clean? Why does naive DFS double-compute `D`?

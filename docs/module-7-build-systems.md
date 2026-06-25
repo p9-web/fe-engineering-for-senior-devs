@@ -1,4 +1,46 @@
-# Module 10: Build Systems
+---
+title: "Module 7 · Build Systems"
+description: "How a file on disk becomes code in the browser — twice: native-ESM dev servers, esbuild pre-bundling, HMR via the module graph, and Rollup production bundling."
+learn:
+  module: 7
+  level: advanced
+  timeRequired: PT40M
+  prerequisites:
+    - "tree shaking & ESM vs CJS (module 6)"
+    - "how code runs (module 1)"
+    - "ESM import syntax"
+  outcomes:
+    - "Explain why a file that exists on disk is still unreachable (the exports allowlist)"
+    - "Explain why editing a leaf component is instant but editing a shared store reloads the page"
+    - "Name the structural reasons a feature works in dev but breaks in the build"
+  concepts:
+    - "module resolution (exports field, conditions, bare specifiers)"
+    - "native-ESM dev server (transform on demand)"
+    - "dependency pre-bundling (optimizeDeps)"
+    - "why esbuild is fast (native, parallel, single-pass)"
+    - "HMR (module graph, accept boundaries)"
+    - "Rollup production build"
+    - "code splitting"
+    - "tree shaking (side-effect hints)"
+    - "the asset graph"
+    - "the two-engine dev/prod consistency gap"
+    - "Rolldown"
+  misconceptions:
+    - "the exports field is just a default-entry pointer (it is an allowlist firewall — unlisted subpaths are sealed even if the file exists)"
+    - "the dev server bundles your app (Vite serves your code unbundled over native ESM; only dependencies are pre-bundled)"
+    - "esbuild is fast because it skips GC (it is native code + parallelism + minimal AST passes)"
+    - "HMR just reloads the changed file (it walks the graph up to an accept boundary; no boundary means a full reload)"
+  selfTests: 3
+  primarySources:
+    - "Vite"
+    - "esbuild"
+    - "Rollup"
+    - "Node package exports resolution"
+    - "Rolldown"
+  teachingApproach: "Follow one import from disk to browser in dev, then again through the production engine, and contrast the two."
+---
+
+# Module 7: Build Systems
 
 Most developers run `npm run dev` and `npm run build` without asking why those two commands run *different engines* over the same source. A build system answers one question — **how does a file on disk become executable code in the browser?** — but it answers it twice, with opposite strategies for dev and production. Understanding both is what separates someone who *configures* Vite from someone who can debug it.
 
@@ -22,7 +64,7 @@ The old model (webpack-era) bundled your *entire* app before serving the first b
 ## 3. Why esbuild Is Fast (and Where It Stops)
 esbuild does the dev transform and pre-bundle. It's 10–100× faster than JS-based toolchains — not because the algorithm is cleverer, but because of *execution-level* choices.
 
-* **Native, parallel, single-pass:** Written in Go, compiled to native code (no JS parse/JIT warmup), and it parallelizes across all cores — bundling is embarrassingly parallel per file. Crucially it makes **as few passes over the AST as possible**, reusing one representation across parse → transform → print, where a Babel-style pipeline re-traverses the tree many times. (Go *does* have a GC; the speed isn't "no GC" — it's native code + parallelism + minimal passes + tight memory layout. See Module 7 on measuring such claims rather than trusting them.)
+* **Native, parallel, single-pass:** Written in Go, compiled to native code (no JS parse/JIT warmup), and it parallelizes across all cores — bundling is embarrassingly parallel per file. Crucially it makes **as few passes over the AST as possible**, reusing one representation across parse → transform → print, where a Babel-style pipeline re-traverses the tree many times. (Go *does* have a GC; the speed isn't "no GC" — it's native code + parallelism + minimal passes + tight memory layout. See Module 9 on measuring such claims rather than trusting them.)
 * **Where it stops:** esbuild deliberately omits some high-level optimizations and fine-grained chunk control. That's exactly why Vite doesn't use it for the *production* output — see §5.
 
 ## 4. HMR: Why Your Component State Survives an Edit
@@ -40,13 +82,13 @@ In production you *do* want one optimized bundle (or a few), because HTTP reques
 
 * **Why Rollup for output:** Rollup produces tighter bundles with mature **code-splitting**, CSS handling, and a deep plugin ecosystem — the things esbuild intentionally keeps minimal. The cost of a slower bundler is acceptable here because the build runs once, not on every keystroke.
 * **Code splitting:** Every dynamic `import()` becomes a **split point** — its own chunk, fetched on demand (route-level lazy loading is just this). Rollup also **hoists modules shared by multiple chunks** into a common chunk so they aren't duplicated, balancing request count against cache reuse.
-* **Tree shaking:** Rollup drops unreferenced ESM exports, gated by the side-effect hints from Module 5 (`"sideEffects": false`, `/*#__PURE__*/`). See [Module 5](/module-5-compilers) for why ESM is statically shakeable and CommonJS is not.
+* **Tree shaking:** Rollup drops unreferenced ESM exports, gated by the side-effect hints from Module 6 (`"sideEffects": false`, `/*#__PURE__*/`). See [Module 6](/module-6-compilers) for why ESM is statically shakeable and CommonJS is not.
 * **Asset graph:** `import './styles.css'` and `import logo from './logo.png'` are treated as graph nodes too — extracted, hashed for cache-busting, and rewritten to final URLs.
 
 ## 6. The Two-Engine Consistency Tradeoff
 Dev uses native ESM + esbuild; production uses Rollup. Same source, two pipelines — and they can **disagree**. A module-execution-order edge case, a CSS-injection timing difference, or a dependency that behaves differently bundled vs. unbundled can produce "works in dev, breaks in build." This is the structural weakness of the fast-dev-server approach.
 
-The industry's answer is to **unify the engines**: **Rolldown**, a Rust bundler from the Vite team, is being adopted (opt-in `rolldown-vite` as of this writing) to handle *both* dev pre-bundling and production output — eliminating the dev/prod gap and the cost of maintaining two code paths. It's the same throughline as Module 5: the more the toolchain shares one representation, the fewer surprises leak through. For the from-scratch version of a module graph + HMR, build the [mini bundler](/module-6-build-things) in Module 6.
+The industry's answer is to **unify the engines**: **Rolldown**, a Rust bundler from the Vite team, is being adopted (opt-in `rolldown-vite` as of this writing) to handle *both* dev pre-bundling and production output — eliminating the dev/prod gap and the cost of maintaining two code paths. It's the same throughline as Module 6: the more the toolchain shares one representation, the fewer surprises leak through. For the from-scratch version of a module graph + HMR, build the [mini bundler](/module-8-build-things) in Module 8.
 
 > **Self-Test:**
 > A feature works perfectly under `npm run dev` but throws in the `npm run build` output. Name two structural reasons this whole class of bug exists. (1) Dev serves unbundled native ESM while production runs Rollup — different module concatenation, execution order, and dead-code elimination. 2) Dependencies are esbuild-prebundled in dev but Rollup-bundled for build, so a dep relying on a specific interop or side-effect can resolve differently. The fix at the ecosystem level is a single unified bundler for both phases.)
