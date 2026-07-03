@@ -244,10 +244,16 @@ export default defineConfig({
     nav: [
       { text: icon('home', 15) + 'Home', link: '/' },
       { text: icon('list', 15) + 'Syllabus', link: '/course-syllabus' },
-      { text: 'Tier 1 · Foundation', items: withIcons(tier1) },
-      { text: 'Tier 2 · Differentiators', items: withIcons(tier2) },
-      { text: 'Tier 3 · Rare Territory', items: withIcons(tier3) },
-      { text: 'Tier 4 · Frontier', items: withIcons(tier4) },
+      {
+        // One dropdown; each Tier is a titled group, which VitePress renders as a separated section.
+        text: icon('grid-3x3', 15) + 'Modules',
+        items: [
+          { text: 'Tier 1 · Foundation', items: withIcons(tier1) },
+          { text: 'Tier 2 · Differentiators', items: withIcons(tier2) },
+          { text: 'Tier 3 · Rare Territory', items: withIcons(tier3) },
+          { text: 'Tier 4 · Frontier', items: withIcons(tier4) },
+        ],
+      },
     ],
     sidebar: [
       {
