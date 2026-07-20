@@ -134,6 +134,9 @@ export default defineConfig({
     server: { port: 5179 }, // avoid the default 5173
   },
   head: [
+    // favicon — base-prefixed on purpose: VitePress does not prepend `base` to head hrefs.
+    ['link', { rel: 'icon', type: 'image/png', href: '/fe-engineering-for-senior-devs/favicon.png' }],
+    ['link', { rel: 'apple-touch-icon', href: '/fe-engineering-for-senior-devs/favicon.png' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
     [
