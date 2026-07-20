@@ -34,6 +34,9 @@ learn:
     - "Chrome compositor"
     - "DevTools performance panel"
   teachingApproach: "Trace one frame through the pixel pipeline, then show which property edits re-enter which stage."
+  recall:
+    - "From memory: in module 1's event loop, does the microtask queue drain after every task and callback, or only once per frame before the render step?"
+    - "Before reading: where does the browser's 'update the rendering' step sit relative to a task and its microtask checkpoint?"
 ---
 
 # Module 2: Understand the Browser Like an Operating System
@@ -91,8 +94,16 @@ flowchart TD
 * **Layers cost memory:** Promoting an element to its own compositor layer (via [`will-change: transform`](https://developer.mozilla.org/en-US/docs/Web/CSS/will-change), `transform: translateZ(0)`, etc.) lets the GPU move it for free — but each layer eats GPU memory. "Layer explosion" (promoting hundreds of elements) trades one problem for another.
 * **Containment:** [`contain: layout`](https://developer.mozilla.org/en-US/docs/Web/CSS/contain) and [`content-visibility: auto`](https://developer.mozilla.org/en-US/docs/Web/CSS/content-visibility) let you tell the browser a subtree's layout/paint is independent or can be skipped entirely when off-screen — bounding invalidation so one change doesn't re-lay-out the whole document.
 
-> **Self-Test:**
-> Why is `transform: translateX(100px)` fast but `left: 100px` slow? Because `transform` is a compositor-only property (skip Layout and Paint), while `left` is a layout property that re-runs the whole pipeline. Animate position with `transform`, not `left`/`top`.
+<SelfTest>
+
+Why is `transform: translateX(100px)` fast but `left: 100px` slow?
+
+<template #answer>
+
+Because `transform` is a compositor-only property (skip Layout and Paint), while `left` is a layout property that re-runs the whole pipeline. Animate position with `transform`, not `left`/`top`.
+
+</template>
+</SelfTest>
 
 ## 4. The Critical Rendering Path & Parsing
 Pixels can't appear until code arrives and parses. How you load scripts dictates when the engine can start.
@@ -154,5 +165,13 @@ items.forEach((el, i) => {
 })
 ```
 
-> **Self-Test:**
-> Why is `el.style.width = "100px"; console.log(el.offsetWidth)` expensive, and why does the FAST version above turn N layouts into 1? The write invalidates layout; the immediate read forces a synchronous reflow to answer with fresh geometry. Batching all reads first lets the browser satisfy them from a single layout pass, then all writes invalidate once. This read-then-write split is the single most reusable rendering-performance pattern.
+<SelfTest>
+
+Why is `el.style.width = "100px"; console.log(el.offsetWidth)` expensive, and why does the FAST version above turn N layouts into 1?
+
+<template #answer>
+
+The write invalidates layout; the immediate read forces a synchronous reflow to answer with fresh geometry. Batching all reads first lets the browser satisfy them from a single layout pass, then all writes invalidate once. This read-then-write split is the single most reusable rendering-performance pattern.
+
+</template>
+</SelfTest>

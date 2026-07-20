@@ -32,6 +32,10 @@ learn:
     - "git history"
     - "DevTools profiler"
   teachingApproach: "Pick a real question, then show the fastest path through the source that answers it."
+  recall:
+    - "From memory: name V8's execution tiers (Ignition, Sparkplug, TurboFan) and explain why an un-warmed benchmark loop measures the interpreter, not the optimized code (M1)?"
+    - "From memory: what lets the optimizing JIT delete or hoist a loop body whose result is never consumed, and how does that differ from build-time dead-code elimination (M1, M7)?"
+    - "Before reading: why is performance.now() deliberately clamped, and why does profiling a real workload beat guessing where the bottleneck is (M2)?"
 ---
 
 # Module 11: Source Code Reading & Technical Judgment
@@ -49,8 +53,16 @@ Advanced engineering is not just writing code; it is reading it, understanding t
 * **Set a breakpoint in `node_modules`.** Source maps (Module 7) let you step into the real library code from your own app in DevTools. Watching the actual call stack beats reading.
 * **Use git as archaeology.** `git blame` and the PR that introduced a line tell you *why* it exists. A weird-looking workaround usually has a linked issue explaining the bug it fixes — design intent lives in history, not the file.
 
-> **Self-Test:**
-> You want to know why Vue batches updates. Which gets the answer fastest: (a) reading `scheduler.ts` top to bottom, (b) finding the `nextTick`/`queueJob` tests, (c) `git blame` on the queue-dedup line and reading the linked issue? In practice (b) then (c): the test shows *what* the contract guarantees; the history shows *what bug* forced it.
+<SelfTest>
+
+You want to know why Vue batches updates. Which gets the answer fastest: (a) reading `scheduler.ts` top to bottom, (b) finding the `nextTick`/`queueJob` tests, (c) `git blame` on the queue-dedup line and reading the linked issue?
+
+<template #answer>
+
+In practice (b) then (c): the test shows *what* the contract guarantees; the history shows *what bug* forced it.
+
+</template>
+</SelfTest>
 
 ## 2. Judgment Is Measured, Not Asserted
 Reading source tells you *how* something works; only measurement tells you whether a decision is right.
@@ -61,14 +73,22 @@ Reading source tells you *how* something works; only measurement tells you wheth
   * **Warm up.** Cold runs measure [Ignition/Sparkplug](https://v8.dev/blog/sparkplug), not TurboFan. Loop enough to reach steady state, then measure.
   * **Timer resolution lies.** `performance.now()` is deliberately **[clamped/jittered](https://developer.mozilla.org/en-US/docs/Web/API/Performance/now#security_requirements)** (a Spectre mitigation — ~100µs in Chrome, finer only in cross-origin-isolated contexts), so sub-millisecond single-shot timings are noise. Measure many iterations and divide.
 
-> **Self-Test:**
-> This "benchmark" reports 0ms. Why, and what one line fixes it?
-> ```js
-> const t = performance.now()
-> for (let i = 0; i < 1e7; i++) Math.sqrt(i)   // result unused
-> console.log(performance.now() - t)
-> ```
-> *(Because nothing consumes `Math.sqrt(i)`, the optimizer may eliminate or hoist the body — so the number is meaningless: near-zero, or just timer noise, not real work. Fix: `sum += Math.sqrt(i)` and `console.log(sum)` so the computation is observable and can't be dropped.)*
+<SelfTest variant="run">
+
+This "benchmark" reports 0ms. Why, and what one line fixes it?
+
+```js
+const t = performance.now()
+for (let i = 0; i < 1e7; i++) Math.sqrt(i)   // result unused
+console.log(performance.now() - t)
+```
+
+<template #answer>
+
+Because nothing consumes `Math.sqrt(i)`, the optimizer may eliminate or hoist the body — so the number is meaningless: near-zero, or just timer noise, not real work. Fix: `sum += Math.sqrt(i)` and `console.log(sum)` so the computation is observable and can't be dropped.
+
+</template>
+</SelfTest>
 
 * **Evaluating a dependency is judgment too — make it concrete:** does it tree-shake (ESM + [`"sideEffects": false`](https://rollupjs.org/configuration-options/#treeshake-modulesideeffects), Module 7)? `grep` your codebase for the export surface you *actually* use — often it's two functions of a 50KB lib. Open the dep's own `node_modules` to see its transitive weight. And the real question: *if this breaks in two years, can my team own it?*
 

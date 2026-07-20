@@ -26,6 +26,11 @@ async function render() {
       theme: isDark.value ? 'dark' : 'default',
       fontFamily: 'var(--vp-font-family-mono, ui-monospace, monospace)',
     })
+    // Wait for the mono webfont before rendering: mermaid sizes node boxes by
+    // measuring label text, and measuring with the fallback font (while JetBrains
+    // Mono is still loading) yields boxes too small for the taller webfont — the
+    // last wrapped line then clips. fonts.ready guarantees measure == paint font.
+    if (typeof document !== 'undefined' && document.fonts) await document.fonts.ready
     const { svg: out } = await mermaid.render(`mermaid-${counter++}`, source)
     svg.value = out
     error.value = ''
@@ -69,6 +74,14 @@ watch(isDark, render) // re-theme on the site's dark/light toggle
 .mermaid-svg :deep(svg) {
   max-width: 100%;
   height: auto;
+}
+/* Safety net against node-label clipping: never crop a hair-too-tall label,
+   and keep a controlled line-height so multi-line nodes measure predictably. */
+.mermaid-svg :deep(foreignObject) {
+  overflow: visible;
+}
+.mermaid-svg :deep(.nodeLabel) {
+  line-height: 1.35;
 }
 .mermaid-loading,
 .mermaid-error {

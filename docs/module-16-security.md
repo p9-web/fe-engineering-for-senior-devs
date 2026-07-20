@@ -30,7 +30,7 @@ learn:
     - "site isolation is about cookies (it's about separating address spaces so a Spectre read can't reach another site's data)"
     - "COOP alone enables SharedArrayBuffer (you need COOP *and* COEP — isolation requires sealing both opener and embeds)"
     - "CSP and Trusted Types are the same thing (CSP gates sources; Trusted Types gates the dangerous sink calls themselves)"
-  selfTests: 3
+  selfTests: 5
   primarySources:
     - "Chromium site-isolation docs"
     - "web.dev cross-origin isolation guide"
@@ -38,6 +38,10 @@ learn:
     - "MDN COOP/COEP/CORP"
     - "Spectre (Kocher et al., 2018)"
   teachingApproach: "Start from the hardware attack (Spectre), show why it forced an architectural response, then derive each header and policy as a wall against a specific read primitive."
+  recall:
+    - "From memory: what is a `SharedArrayBuffer` (modules 1, 10), and how do `Atomics` and Wasm threads (module 13) depend on shared linear memory — before this module explains why the platform gates it behind cross-origin isolation?"
+    - "Before reading: on the request path (module 4), how does the browser receive an HTTP response header, and where in the response does one like `Cross-Origin-Resource-Policy` live?"
+    - "From memory: which DOM APIs parse a plain string into live markup or executable code — can you name the injection sinks such as `innerHTML`, `eval`, or `iframe.srcdoc`, and what does each do with the string?"
 ---
 
 # Module 16: Browser Security Architecture
@@ -79,8 +83,16 @@ flowchart TD
     Recover --> Repeat["Repeat byte by byte"]
 ```
 
-> **Self-Test:**
-> Spectre never "reads" the secret with a normal load instruction — the speculative read is rolled back. So how does the attacker actually learn the value, and why does removing `SharedArrayBuffer` and coarsening `performance.now()` blunt the attack rather than fix the CPU? *(The secret leaks through the **cache side channel**: speculative execution caches a memory line chosen by the secret's value, and the attacker recovers it by **timing** which line is now fast to access. The CPU flaw remains; what the browser removes is the **measuring instrument** — a high-resolution clock. `SharedArrayBuffer` + a spinning worker is a homemade nanosecond timer, and `performance.now()` was the built-in one, so coarsening/gating both denies the precision needed to distinguish a cache hit from a miss.)*
+<SelfTest>
+
+Spectre never "reads" the secret with a normal load instruction — the speculative read is rolled back. So how does the attacker actually learn the value, and why does removing `SharedArrayBuffer` and coarsening `performance.now()` blunt the attack rather than fix the CPU?
+
+<template #answer>
+
+The secret leaks through the **cache side channel**: speculative execution caches a memory line chosen by the secret's value, and the attacker recovers it by **timing** which line is now fast to access. The CPU flaw remains; what the browser removes is the **measuring instrument** — a high-resolution clock. `SharedArrayBuffer` + a spinning worker is a homemade nanosecond timer, and `performance.now()` was the built-in one, so coarsening/gating both denies the precision needed to distinguish a cache hit from a miss.
+
+</template>
+</SelfTest>
 
 ## 3. Cross-Origin Isolation: Earning Back the Sharp Tools
 Some legitimate, powerful features *need* the very capabilities Spectre made dangerous: `SharedArrayBuffer` (Wasm threads, Module 13; Atomics, Module 10), high-resolution timers, `performance.measureUserAgentSpecificMemory()` (Module 1). The platform's bargain: you may have them **only if you make your page `crossOriginIsolated`** — provably sealed so that even if a Spectre gadget runs, there's no cross-origin data co-resident to steal. You opt in with two headers:
@@ -123,8 +135,32 @@ flowchart TD
     Both -->|"only one"| No["Stays false —<br/>can't prove nothing is co-resident"]
 ```
 
-> **Self-Test:**
-> A developer sets `COOP: same-origin` alone, expecting `SharedArrayBuffer` to work, and `crossOriginIsolated` stays `false`. Why is COOP necessary but not sufficient, and what specific gap does COEP close that COOP can't? *(COOP only seals the **opener/window** relationship — it stops cross-origin windows from holding a reference to yours. But your page can still **embed** arbitrary cross-origin subresources (images, scripts, fonts) that load into your process, leaving cross-origin data co-resident and re-exposing the Spectre target. COEP closes that by requiring every embedded cross-origin resource to opt in (via CORP/CORS). Isolation needs both the opener side and the embedding side sealed, so the browser only grants `crossOriginIsolated` when both headers are present.)*
+<SelfTest>
+
+A developer sets `COOP: same-origin` alone, expecting `SharedArrayBuffer` to work, and `crossOriginIsolated` stays `false`. Why is COOP necessary but not sufficient, and what specific gap does COEP close that COOP can't?
+
+<template #answer>
+
+COOP only seals the **opener/window** relationship — it stops cross-origin windows from holding a reference to yours. But your page can still **embed** arbitrary cross-origin subresources (images, scripts, fonts) that load into your process, leaving cross-origin data co-resident and re-exposing the Spectre target. COEP closes that by requiring every embedded cross-origin resource to opt in (via CORP/CORS). Isolation needs both the opener side and the embedding side sealed, so the browser only grants `crossOriginIsolated` when both headers are present.
+
+</template>
+</SelfTest>
+
+<SelfTest variant="run">
+
+Run this in the console on this very page (it ships no COOP/COEP). Predict both values first:
+
+```js
+console.log('crossOriginIsolated:', self.crossOriginIsolated)
+console.log('SharedArrayBuffer typeof:', typeof SharedArrayBuffer)
+```
+
+<template #answer>
+
+`crossOriginIsolated` is `false` — this page sent no COOP+COEP, so the browser can't prove nothing cross-origin is co-resident and keeps the Spectre-sensitive tools gated. The trap is the second line: `typeof SharedArrayBuffer` may still print `"function"` on desktop Chrome (the constructor lingers for compatibility), yet *defined is not usable* — you can't `postMessage` a `SharedArrayBuffer` to a worker, and `performance.now()` stays coarsened, precisely because isolation is off. The real gate is the **`crossOriginIsolated` boolean**, not whether the constructor happens to exist (§3).
+
+</template>
+</SelfTest>
 
 ## 4. Trusted Types: Killing DOM-Based XSS at the Sink
 Classic XSS defense escapes input at the *source* — sanitize what the user typed, encode it on output. **DOM-based XSS** slips past that entirely: the dangerous step happens client-side, when *already-trusted-looking* data flows into a DOM **sink** like `element.innerHTML`, `script.src`, `eval`, or `iframe.srcdoc`. The string may have been built from `location.hash`, a JSON response, or template logic long after any input check.
@@ -157,8 +193,16 @@ flowchart TD
     Policy --> Safe["Sanitized markup written safely"]
 ```
 
-> **Self-Test:**
-> Your app HTML-escapes all user input on the server, yet a `#<img src=x onerror=...>` in the URL fragment still executes because client code does `panel.innerHTML = decodeURIComponent(location.hash.slice(1))`. Why did server-side escaping not help, and how does Trusted Types stop this where another round of escaping might not? *(The payload never went through the server — it lives in the URL fragment and is injected entirely client-side, so server escaping is irrelevant; this is DOM-based XSS. Trusted Types blocks it structurally: with `require-trusted-types-for 'script'`, assigning a **plain string** to `innerHTML` throws, regardless of where the string came from. The only way to write the sink is via a registered policy, which forces the value through your sanitizer — you can't accidentally forget to escape, because the platform rejects the unsafe call itself.)*
+<SelfTest>
+
+Your app HTML-escapes all user input on the server, yet a `#<img src=x onerror=...>` in the URL fragment still executes because client code does `panel.innerHTML = decodeURIComponent(location.hash.slice(1))`. Why did server-side escaping not help, and how does Trusted Types stop this where another round of escaping might not?
+
+<template #answer>
+
+The payload never went through the server — it lives in the URL fragment and is injected entirely client-side, so server escaping is irrelevant; this is DOM-based XSS. Trusted Types blocks it structurally: with `require-trusted-types-for 'script'`, assigning a **plain string** to `innerHTML` throws, regardless of where the string came from. The only way to write the sink is via a registered policy, which forces the value through your sanitizer — you can't accidentally forget to escape, because the platform rejects the unsafe call itself.
+
+</template>
+</SelfTest>
 
 ## 5. Content-Security-Policy: Defense-in-Depth
 **[CSP](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP)** is the broader allow-list layer Trusted Types plugs into. Where Trusted Types governs *the dangerous call*, CSP governs *what sources are allowed to load and execute at all*:
@@ -189,5 +233,13 @@ None of these pieces is a feature in isolation — together they're a coherent t
 
 The throughline of Tier 4: each frontier capability — Wasm threads (M13), GPU compute (M14), edge execution (M15) — expands what runs in the page, and the security architecture is what lets the platform grant that power *without* reopening the holes that power creates. You earn `SharedArrayBuffer` by proving isolation; you earn a safe DOM by funneling every sink through a policy. Power and containment ship together.
 
-> **Self-Test:**
-> You enable a strict, nonce-based CSP and consider the page "XSS-safe." A pentester still lands a DOM-XSS via `widget.innerHTML = buildFromHash()`, using only first-party, nonce'd scripts. Why didn't CSP stop it, and which Tier-4 mechanism would have — illustrating why these are layers rather than alternatives? *(CSP governs **which scripts may load/execute by source**; the attack used your own legitimate, nonce-carrying script, which then wrote attacker-controlled markup into an `innerHTML` sink — CSP never inspects sink writes, so it allows it. **Trusted Types** (§4) would stop it: `require-trusted-types-for 'script'` makes the `innerHTML = string` assignment throw unless the value came from a registered policy. CSP secures the source dimension and Trusted Types the sink dimension; you need both because each is blind to the other's attack.)*
+<SelfTest>
+
+You enable a strict, nonce-based CSP and consider the page "XSS-safe." A pentester still lands a DOM-XSS via `widget.innerHTML = buildFromHash()`, using only first-party, nonce'd scripts. Why didn't CSP stop it, and which Tier-4 mechanism would have — illustrating why these are layers rather than alternatives?
+
+<template #answer>
+
+CSP governs **which scripts may load/execute by source**; the attack used your own legitimate, nonce-carrying script, which then wrote attacker-controlled markup into an `innerHTML` sink — CSP never inspects sink writes, so it allows it. **Trusted Types** (§4) would stop it: `require-trusted-types-for 'script'` makes the `innerHTML = string` assignment throw unless the value came from a registered policy. CSP secures the source dimension and Trusted Types the sink dimension; you need both because each is blind to the other's attack.
+
+</template>
+</SelfTest>

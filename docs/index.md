@@ -32,3 +32,5 @@ features:
     link: /module-9-build-things
     linkText: Build the hard things
 ---
+
+<CourseProgress />
