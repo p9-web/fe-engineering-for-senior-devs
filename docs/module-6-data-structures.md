@@ -27,12 +27,16 @@ learn:
     - "a list diff moves N−1 nodes (LIS keeps the stable subsequence in place)"
     - "a sorted array is the best scheduler (a min-heap wins on insert + peek-min)"
     - "all 32 bits are usable for lane bitmasks (bit 31 deopts out of Smi range)"
-  selfTests: 3
+  selfTests: 4
   primarySources:
     - "Vue runtime-core (patchKeyedChildren)"
     - "React Fiber & scheduler"
     - "find-my-way (Fastify router)"
   teachingApproach: "Name the framework constraint first, then derive the structure the constraint forces."
+  recall:
+    - "From memory: why does Vue's dependency tracking store targets in a WeakMap rather than a Map, and what module 1 rule about object reachability makes the difference?"
+    - "Before reading: which module 5 tree-diff heuristics collapse virtual-DOM reconciliation from O(n³) to O(n), and why does a changed node type still force a full subtree rebuild?"
+    - "From memory: how do V8 hidden classes (module 1) make property reads fast, and why does a mid-object `delete` demote an object to dictionary mode?"
 ---
 
 # Module 6: Practical Data Structures & Algorithms
@@ -57,8 +61,16 @@ flowchart TD
     P3 --> Out["Move D only → 1 DOM move"]
 ```
 
-> **Self-Test:**
-> A list reorders from `[A B C D]` to `[D A B C]`. A naive keyed diff moves three nodes. Why does an LIS-based diff move only **one** (`D`), and what is the "increasing subsequence" here? (`A B C` keep their relative order — that's the LIS — so only `D` is relocated.)
+<SelfTest>
+
+A list reorders from `[A B C D]` to `[D A B C]`. A naive keyed diff moves three nodes. Why does an LIS-based diff move only **one** (`D`), and what is the "increasing subsequence" here?
+
+<template #answer>
+
+`A B C` keep their relative order — that's the LIS — so only `D` is relocated.
+
+</template>
+</SelfTest>
 
 ## 2. Hash Maps, WeakMaps & the Cost of Dictionary Mode
 Reactivity needs to associate objects with their subscribers without leaking memory.
@@ -77,6 +89,35 @@ delete o.b
 (V8 doesn't demote on *every* `delete` — deleting the last property, or an already-slow object, differs — but mid-object `delete` is the classic trigger.)
 
 If you need a true dynamic key→value store, use `Map`; it's built for it and won't deopt your object shapes.
+
+<SelfTest variant="run">
+
+Paste into the console. Predict `ratio` (obj ÷ map) before you run it — this is the "dictionary mode" claim above, measured:
+
+```js
+const N = 200_000
+
+let t = performance.now()
+const obj = {}
+for (let i = 0; i < N; i++) obj['k' + i] = i
+for (let i = 0; i < N; i++) delete obj['k' + i] // churn + delete
+const objMs = performance.now() - t
+
+t = performance.now()
+const map = new Map()
+for (let i = 0; i < N; i++) map.set('k' + i, i)
+for (let i = 0; i < N; i++) map.delete('k' + i)
+const mapMs = performance.now() - t
+
+console.log({ objMs, mapMs, ratio: objMs / mapMs })
+```
+
+<template #answer>
+
+`Map` wins, usually by several×. Loading a plain object with thousands of dynamic keys and then `delete`-ing them forces V8 out of the hidden-class fast path into **dictionary mode** — a real hash table, slower reads, no inline caching — and each `delete` is the classic trigger. `Map` is a purpose-built hash structure with stable insert/delete, so it never pays that deopt. The exact ratio is machine-dependent; that `Map` beats an object *for churny keyed storage* is the invariant — and the reason Vue keys its dep store with `Map`/`WeakMap`, not plain objects.
+
+</template>
+</SelfTest>
 
 ## 3. Linked Lists vs. Heaps (Scheduling) — A Precision Point
 A common claim is "schedulers use linked lists." Reality in React is more interesting, and the distinction matters.
@@ -97,8 +138,16 @@ How does a router match `/users/42/posts` against hundreds of route patterns wit
 
 * **Radix tree:** Routes are stored as a compressed prefix tree. Matching walks the URL segment by segment, so lookup cost scales with the *path depth*, not the *number of routes*. This is how high-performance routers (e.g. [`find-my-way`](https://github.com/delvedor/find-my-way), used by Fastify) and modern framework routers stay fast as route tables grow.
 
-> **Self-Test:**
-> You have 5,000 registered routes. With a linear list of regexes, matching one URL is O(routes). With a radix tree it's O(path segments). For `/a/b/c`, roughly how many node comparisons does the radix tree do — and why doesn't adding the 5,001st route change that number?
+<SelfTest>
+
+You have 5,000 registered routes. With a linear list of regexes, matching one URL is O(routes). With a radix tree it's O(path segments). For `/a/b/c`, roughly how many node comparisons does the radix tree do — and why doesn't adding the 5,001st route change that number?
+
+<template #answer>
+
+Roughly 3 — one comparison per path segment (`a`, `b`, `c`), because matching walks the URL segment by segment. Adding the 5,001st route widens the tree's breadth, not the depth walked for this path, so the cost stays O(path segments), independent of the total route count.
+
+</template>
+</SelfTest>
 
 ## 6. Graphs (Dependency Propagation)
 Signals and fine-grained reactivity (Module 5) form **Directed Acyclic Graphs**.
@@ -106,8 +155,16 @@ Signals and fine-grained reactivity (Module 5) form **Directed Acyclic Graphs**.
 * **Nodes & edges:** Signals and computeds are nodes; "reads from" relationships are edges.
 * **Topological propagation:** When a root signal changes, the system must update a computed only **after** all of its upstream inputs are settled — otherwise it produces a *glitch* (the diamond problem from Module 5). Topological ordering, dirty-flagging, and lazy pull-on-read are the three tools that prevent it.
 
-> **Self-Test:**
-> In the diamond `A → {B, C} → D`, you update `A`. Which traversal order guarantees `D` computes exactly once with both fresh inputs — depth-first or a topological sort that defers `D` until both `B` and `C` are marked clean? Why does naive DFS double-compute `D`?
+<SelfTest>
+
+In the diamond `A → {B, C} → D`, you update `A`. Which traversal order guarantees `D` computes exactly once with both fresh inputs — depth-first or a topological sort that defers `D` until both `B` and `C` are marked clean? Why does naive DFS double-compute `D`?
+
+<template #answer>
+
+The topological sort — deferring `D` until both `B` and `C` are marked clean lets it compute exactly once with both fresh inputs. Naive DFS descends `A → B → D` and computes `D` with a still-stale `C`, then descends `A → C → D` and recomputes `D` — the double-compute (and transient glitch) the ordering exists to prevent.
+
+</template>
+</SelfTest>
 
 ## Synthesis: Structure ↔ Subsystem
 Each structure was chosen for the one operation it makes cheap:

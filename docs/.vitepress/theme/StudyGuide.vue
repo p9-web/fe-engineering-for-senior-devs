@@ -17,6 +17,7 @@ type Learn = {
   misconceptions: string[]
   selfTests: number
   primarySources?: string[]
+  recall?: string[] // retrieval prompts answered from memory before reading (spacing/interleaving)
 }
 
 const { frontmatter } = useData()
@@ -32,20 +33,27 @@ function fmtDuration(iso: string): string {
   return parts.length ? `~${parts.join(' ')}` : iso
 }
 const duration = computed(() => (learn.value ? fmtDuration(learn.value.timeRequired) : ''))
+const chevron = icon('chevron-down', 15)
 </script>
 
 <template>
-  <details v-if="learn" class="study-guide" open>
+  <!-- Collapsed by default: a slim one-line meta strip that sits above the title
+       without burying the content. Expands to the full study scaffold on click. -->
+  <details v-if="learn" class="study-guide">
     <summary>
-      <span class="sg-label" v-html="label('compass', 13, '// how to study this module')" />
-      <span class="sg-meta">
-        <span class="sg-tag" v-html="label('bar-chart-3', 12, learn.level)" />
-        <span class="sg-tag" v-html="label('clock', 12, duration)" />
-        <span class="sg-tag" v-html="label('flask-conical', 12, learn.selfTests + ' self-tests')" />
-      </span>
+      <span class="sg-label" v-html="label('compass', 14, 'How to study this module')" />
+      <span class="sg-meta">{{ learn.level }} · {{ duration }} · {{ learn.selfTests }} self-tests</span>
+      <span class="sg-chevron" v-html="chevron" />
     </summary>
 
     <div class="sg-body">
+      <section v-if="learn.recall?.length" class="sg-section sg-recall">
+        <h4 v-html="label('rotate-ccw', 13, 'Recall first — from earlier modules')" />
+        <ul class="sg-list">
+          <li v-for="r in learn.recall" :key="r">{{ r }}</li>
+        </ul>
+      </section>
+
       <section v-if="learn.prerequisites?.length" class="sg-section">
         <h4 v-html="label('book-marked', 13, 'Assumed knowledge')" />
         <ul class="sg-chips">
@@ -79,58 +87,59 @@ const duration = computed(() => (learn.value ? fmtDuration(learn.value.timeRequi
 
 <style scoped>
 .study-guide {
-  margin: 0 0 30px;
+  margin: 0 0 26px;
   border: 1px solid var(--vp-c-divider);
-  border-left: 3px solid var(--silicon-prompt);
-  border-radius: 0 10px 10px 0;
-  background:
-    linear-gradient(rgba(74, 222, 128, 0.04), rgba(74, 222, 128, 0.04)),
-    var(--vp-c-bg-soft);
+  border-radius: 8px;
+  background: var(--vp-c-bg-soft);
 }
+/* slim: the collapsed strip is a single ~36px row, not a full panel */
 .study-guide > summary {
   cursor: pointer;
   list-style: none;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px 14px;
-  padding: 12px 16px;
+  gap: 12px;
+  padding: 9px 14px;
   user-select: none;
 }
 .study-guide > summary::-webkit-details-marker {
   display: none;
 }
+.study-guide[open] > summary {
+  border-bottom: 1px solid var(--vp-c-divider);
+}
 .sg-label {
   display: inline-flex;
   align-items: center;
+  gap: 7px;
   font-family: var(--vp-font-family-mono);
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  color: var(--vp-c-text-1);
+}
+/* accent only the leading glyph, so the strip stays quiet */
+.sg-label :deep(.lic) {
   color: var(--silicon-prompt);
 }
 .sg-meta {
-  display: flex;
-  gap: 8px;
   margin-left: auto;
-  flex-wrap: wrap;
-}
-.sg-tag {
-  display: inline-flex;
-  align-items: center;
   font-family: var(--vp-font-family-mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--vp-c-text-2);
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 5px;
-  padding: 1px 8px;
+  font-size: 11.5px;
+  color: var(--vp-c-text-3);
+  white-space: nowrap;
+}
+.sg-chevron {
+  display: inline-flex;
+  color: var(--vp-c-text-3);
+  transition: transform 0.2s ease;
+}
+.study-guide[open] .sg-chevron {
+  transform: rotate(180deg);
 }
 .sg-body {
-  padding: 14px 16px 16px;
-  border-top: 1px dashed var(--vp-c-divider);
+  padding: 16px;
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 .sg-section h4 {
   display: flex;
@@ -144,6 +153,17 @@ const duration = computed(() => (learn.value ? fmtDuration(learn.value.timeRequi
 }
 .sg-warn h4 {
   color: var(--silicon-accent);
+}
+.sg-recall h4 {
+  color: var(--silicon-prompt);
+}
+.sg-recall .sg-list {
+  list-style: none;
+  padding-left: 0;
+}
+.sg-recall .sg-list li::before {
+  content: '↻ ';
+  color: var(--silicon-prompt);
 }
 .sg-list {
   margin: 0;

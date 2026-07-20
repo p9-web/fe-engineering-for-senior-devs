@@ -30,13 +30,17 @@ learn:
     - "an isolate is a container (it's a sandbox *inside* one process, sharing the runtime)"
     - "streaming needs HTTP/2 (chunked transfer encoding is HTTP/1.1)"
     - "RSC ships React components to the browser (it ships a serialized render *result*, not the component code)"
-  selfTests: 3
+  selfTests: 5
   primarySources:
     - "Cloudflare Workers docs"
     - "Deno Deploy docs"
     - "React Server Components RFC"
     - "RFC 9112 (HTTP/1.1, chunked transfer)"
   teachingApproach: "Follow one request from an edge isolate to a browser, flushing the page in chunks, and account for what is and isn't possible at each hop."
+  recall:
+    - "From memory: how does the single-threaded event loop from Module 1 let one isolate serve other requests while a handler is parked on `await fetch(...)`?"
+    - "Before reading: what does a `ReadableStream` from Module 4 give you that returning a buffered string does not, and what does `controller.enqueue` actually do to the response body?"
+    - "From memory: in Module 1's terms, why does a resolved promise's continuation run before a `setTimeout(0)` callback, and where does that microtask-vs-macrotask ordering surface once a handler yields the thread?"
 ---
 
 # Module 15: Edge Runtimes & Streaming
@@ -52,8 +56,16 @@ Edge runtimes (Cloudflare Workers, Deno Deploy, Vercel Edge) instead use **V8 is
 * **Kilobytes, not megabytes, of overhead.** Thousands of isolates share one runtime, so a single machine packs far more tenants — the density that makes per-request isolation economical.
 * **Memory-safe separation without a process boundary.** V8 enforces that one isolate can't read another's heap. The tradeoff: you inherit V8's limits, and you do *not* get a full OS.
 
-> **Self-Test:**
-> A Lambda and a Cloudflare Worker both run "the same" JS handler. The Worker cold-starts in ~5ms and the Lambda in ~200ms+. What structural difference accounts for two orders of magnitude — and what does the Worker give up to get it? *(The Lambda boots a container/microVM with its own OS and Node process per cold start; the Worker spins up a V8 isolate inside an already-running process, often from a heap snapshot — no OS, no process fork, no runtime re-init. The Worker gives up the full Node API and native modules: no `fs`, no arbitrary binaries, no threads — only what the sandboxed runtime exposes.)*
+<SelfTest>
+
+A Lambda and a Cloudflare Worker both run "the same" JS handler. The Worker cold-starts in ~5ms and the Lambda in ~200ms+. What structural difference accounts for two orders of magnitude — and what does the Worker give up to get it?
+
+<template #answer>
+
+The Lambda boots a container/microVM with its own OS and Node process per cold start; the Worker spins up a V8 isolate inside an already-running process, often from a heap snapshot — no OS, no process fork, no runtime re-init. The Worker gives up the full Node API and native modules: no `fs`, no arbitrary binaries, no threads — only what the sandboxed runtime exposes.
+
+</template>
+</SelfTest>
 
 ## 2. The Constraint Surface
 Choosing isolates over processes isn't free — it defines what your code *can't* do. Designing for the edge is designing within these walls:
@@ -104,8 +116,44 @@ export default {
 }
 ```
 
-> **Self-Test:**
-> A page's TTFB (time to first byte) is great but the user still stares at a blank screen for 800ms. The server sends `Content-Length` and builds the whole HTML string before responding. How does switching to chunked streaming change *what the user sees first*, and why doesn't a faster TTFB alone fix the blank screen? *(With a buffered `Content-Length` response, "first byte" can arrive quickly but the **body** isn't sent until the entire HTML is built — the browser has nothing to paint for 800ms. Chunked encoding lets the server flush the `<head>` and shell immediately and stream the slow part later, so the browser paints meaningful content while the server still works. TTFB measures when bytes start; perceived load depends on when *renderable* bytes arrive — streaming targets the second.)*
+<SelfTest>
+
+A page's TTFB (time to first byte) is great but the user still stares at a blank screen for 800ms. The server sends `Content-Length` and builds the whole HTML string before responding. How does switching to chunked streaming change *what the user sees first*, and why doesn't a faster TTFB alone fix the blank screen?
+
+<template #answer>
+
+With a buffered `Content-Length` response, "first byte" can arrive quickly but the **body** isn't sent until the entire HTML is built — the browser has nothing to paint for 800ms. Chunked encoding lets the server flush the `<head>` and shell immediately and stream the slow part later, so the browser paints meaningful content while the server still works. TTFB measures when bytes start; perceived load depends on when *renderable* bytes arrive — streaming targets the second.
+
+</template>
+</SelfTest>
+
+<SelfTest variant="run">
+
+Run this in any console — it consumes a `ReadableStream` whose second chunk is delayed. Predict the two timestamps before you run it:
+
+```js
+const stream = new ReadableStream({
+  async start(c) {
+    const enc = new TextEncoder()
+    c.enqueue(enc.encode('shell'))
+    await new Promise((r) => setTimeout(r, 500)) // slow data
+    c.enqueue(enc.encode('…rest'))
+    c.close()
+  },
+})
+const reader = stream.getReader()
+const dec = new TextDecoder()
+const t0 = performance.now()
+for (let r; !(r = await reader.read()).done; )
+  console.log(Math.round(performance.now() - t0), 'ms:', dec.decode(r.value))
+```
+
+<template #answer>
+
+`~0 ms: shell`, then `~500 ms: …rest`. The reader gets `shell` immediately — the stream does **not** buffer until `close()`. Each `enqueue` is deliverable the moment it runs, and the 500ms `await` between them shows up as the gap between chunks. That incremental delivery is the whole basis of §3–§4: the runtime frames each enqueued chunk as it arrives, so the browser can paint the shell while the server is still awaiting the slow part.
+
+</template>
+</SelfTest>
 
 ## 4. Streaming SSR: Flush the Shell, Stream the Rest
 Server-side rendering used to be all-or-nothing: run the whole component tree to an HTML string, then send it. One slow data dependency held the *entire* page hostage. **Streaming SSR** breaks the page into a fast **shell** and slower **boundaries**.
@@ -153,8 +201,16 @@ A Server Component runs *only on the server* — it can touch the database or fi
 
 The reason this is a *serialization* problem, not a rendering one: the boundary between "ran on the server, now inert data" and "must run on the client, ship the code" has to be encoded in the stream itself. Props passed from a Server to a Client Component must be serializable — you can't send a function or a class instance across that line, only data. That single constraint is the whole RSC mental model.
 
-> **Self-Test:**
-> You import a 300KB markdown-parsing library and use it inside a Server Component to render a post. The client bundle doesn't grow at all. Where did the library "go," and what exactly traveled to the browser instead? *(The library ran on the server during render; its code was never added to the client bundle. What traveled was the **RSC payload** — the serialized result of rendering (the resulting element tree: tags, text, props) — not the parser or the markdown source. The browser reconstructs UI from that data. Only components marked `"use client"` ship their code; a Server Component contributes data, not JavaScript.)*
+<SelfTest>
+
+You import a 300KB markdown-parsing library and use it inside a Server Component to render a post. The client bundle doesn't grow at all. Where did the library "go," and what exactly traveled to the browser instead?
+
+<template #answer>
+
+The library ran on the server during render; its code was never added to the client bundle. What traveled was the **RSC payload** — the serialized result of rendering (the resulting element tree: tags, text, props) — not the parser or the markdown source. The browser reconstructs UI from that data. Only components marked `"use client"` ship their code; a Server Component contributes data, not JavaScript.
+
+</template>
+</SelfTest>
 
 ## 6. Putting It Together: Render at the Edge, Stream to the Client
 The pieces compose into one request path:
@@ -169,5 +225,13 @@ The latency win is real: compute near the user, and overlap server work with cli
 * **CPU-bound work at the edge.** A heavy render or parse blows the CPU-time cap (§2). Push genuinely heavy compute to Wasm (Module 13), a GPU tier (Module 14), or an origin service — the edge is for fast decisions and orchestration, not number-crunching.
 * **Reaching for missing APIs.** Edge ≠ Node; code assuming `fs`/`Buffer` breaks (§2).
 
-> **Self-Test:**
-> A team wraps *every* component on the page in its own `<Suspense>` boundary "to stream as much as possible," and the page feels janky and slow despite streaming. Why can more boundaries hurt — and what's the principle for placing them? *(Each boundary is a flush point: a fallback rendered, then a content chunk + an inline swap script, then a possible layout shift and a hydration step. Dozens of them mean constant placeholder churn, cumulative layout shift, and per-boundary overhead that outweighs the parallelism. Place boundaries at meaningful content seams — where a genuinely slow data dependency would otherwise block the page — not around every node. The goal is to isolate the slow part, not to maximize chunk count.)*
+<SelfTest>
+
+A team wraps *every* component on the page in its own `<Suspense>` boundary "to stream as much as possible," and the page feels janky and slow despite streaming. Why can more boundaries hurt — and what's the principle for placing them?
+
+<template #answer>
+
+Each boundary is a flush point: a fallback rendered, then a content chunk + an inline swap script, then a possible layout shift and a hydration step. Dozens of them mean constant placeholder churn, cumulative layout shift, and per-boundary overhead that outweighs the parallelism. Place boundaries at meaningful content seams — where a genuinely slow data dependency would otherwise block the page — not around every node. The goal is to isolate the slow part, not to maximize chunk count.
+
+</template>
+</SelfTest>

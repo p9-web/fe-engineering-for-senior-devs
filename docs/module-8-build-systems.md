@@ -33,7 +33,7 @@ learn:
     - "esbuild is fast because it skips GC (it is native code + parallelism + minimal AST passes)"
     - "HMR just reloads the changed file (it walks the graph up to an accept boundary; no boundary means a full reload)"
     - "Module Federation is build-time linking (it resolves and shares remotes at runtime, so version skew is a production failure)"
-  selfTests: 4
+  selfTests: 5
   primarySources:
     - "Vite"
     - "esbuild"
@@ -41,6 +41,10 @@ learn:
     - "Node package exports resolution"
     - "Rolldown"
   teachingApproach: "Follow one import from disk to browser in dev, then again through the production engine, and contrast the two."
+  recall:
+    - "From memory: what property of ESM `import`/`export` lets a bundler prove an export is unused *without running the code*, and why can't it make that call for a CommonJS `require`?"
+    - "Before reading: recall how the browser loads modules over the network — why does each unbundled `import` cost its own round-trip, so a deep dependency tree fans out into a request waterfall?"
+    - "From memory: why does a module's top-level code run only once however many modules import it — what gets cached, and where?"
 ---
 
 # Module 8: Build Systems
@@ -55,8 +59,32 @@ Before anything executes, every `import` specifier must resolve to a concrete fi
 * **Extension & directory resolution:** `./util` → `./util.ts` → `./util/index.ts`. Cheap to write, but every guess is a filesystem `stat`. A bundler caches these; the browser can't, which feeds directly into the dev-server design below.
 * **Import maps — the browser's own resolver:** The browser can't resolve `import 'vue'` by itself, but [import maps](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/script/type/importmap) let you teach it to. A `<script type="importmap">` declares a JSON map from bare specifiers to URLs, so `import 'vue'` resolves to a real (often CDN) URL with **no bundler in the loop** — the native counterpart to Node's `node_modules` walk, and the basis of no-build and ESM-CDN workflows (and of distributed-frontend sharing, §5). The limits are the flip side of skipping the build: no tree shaking, no transform, and a deep dependency still fans out into a request waterfall — the exact problem `optimizeDeps` (§2) exists to solve.
 
-> **Self-Test:**
-> A package's file exists at `node_modules/lib/dist/secret.js`, but `import 'lib/secret'` throws [`ERR_PACKAGE_PATH_NOT_EXPORTED`](https://nodejs.org/api/packages.html#subpath-exports). Why, when the file is right there? (The package ships an `exports` map that doesn't list the `./secret` subpath. `exports` is an allowlist — unlisted subpaths are sealed off regardless of what's on disk. The fix is the package author's, not yours.)
+<SelfTest>
+
+A package's file exists at `node_modules/lib/dist/secret.js`, but `import 'lib/secret'` throws [`ERR_PACKAGE_PATH_NOT_EXPORTED`](https://nodejs.org/api/packages.html#subpath-exports). Why, when the file is right there?
+
+<template #answer>
+
+The package ships an `exports` map that doesn't list the `./secret` subpath. `exports` is an allowlist — unlisted subpaths are sealed off regardless of what's on disk. The fix is the package author's, not yours.
+
+</template>
+</SelfTest>
+
+<SelfTest variant="run">
+
+Open a blank tab (`about:blank`) and run these in the console. Predict which resolves and which throws, before you run them:
+
+```js
+await import('https://esm.sh/nanoid') // full URL
+await import('nanoid')                 // bare specifier
+```
+
+<template #answer>
+
+The URL import resolves — the native ESM loader can fetch an absolute URL. The bare `import('nanoid')` throws `TypeError: Failed to resolve module specifier "nanoid"`: the browser has no `node_modules` walk and, on a bare page, no import map, so a bare name means nothing to it. That single gap is the entire reason a dev server rewrites bare specifiers to URLs (§2), and why `<script type="importmap">` exists — declare `{"imports":{"nanoid":"https://esm.sh/nanoid"}}` in the page and the bare form resolves too.
+
+</template>
+</SelfTest>
 
 ## 2. The Dev Server: Native ESM, Transformed On Demand
 The old model (webpack-era) bundled your *entire* app before serving the first byte — startup grew with codebase size. Vite inverts this: **[don't bundle in dev at all.](https://vite.dev/guide/why.html#the-origins)**
@@ -105,8 +133,16 @@ flowchart TD
     Stop --> Keep["App state survives"]
 ```
 
-> **Self-Test:**
-> You edit a `.vue` component and its `ref` state is preserved; you edit a plain `.ts` utility it imports and the whole page reloads. Why the difference? (The `.vue` file is an HMR *boundary* — the plugin made it self-accepting, so only it re-executes. The `.ts` util declares no `accept`, so Vite propagates the invalidation upward; finding no boundary before the entry, it falls back to a full reload.)
+<SelfTest>
+
+You edit a `.vue` component and its `ref` state is preserved; you edit a plain `.ts` utility it imports and the whole page reloads. Why the difference?
+
+<template #answer>
+
+The `.vue` file is an HMR *boundary* — the plugin made it self-accepting, so only it re-executes. The `.ts` util declares no `accept`, so Vite propagates the invalidation upward; finding no boundary before the entry, it falls back to a full reload.
+
+</template>
+</SelfTest>
 
 ## 5. The Production Build: A Different Engine Entirely
 In production you *do* want one optimized bundle (or a few), because HTTP request count and unused code now cost real user time. Vite hands this to **[Rollup](https://vite.dev/guide/why.html#the-origins)**, not esbuild.
@@ -117,13 +153,29 @@ In production you *do* want one optimized bundle (or a few), because HTTP reques
 * **Asset graph:** `import './styles.css'` and `import logo from './logo.png'` are treated as graph nodes too — extracted, hashed for cache-busting, and rewritten to final URLs.
 * **Sharing across separately-built apps (Module Federation):** Code splitting divides *one* build; [Module Federation](https://module-federation.io/) shares code across *independently built and deployed* apps at **runtime**. A **host** loads a **remote**'s exposed modules over the network, and the two negotiate **shared singletons** — so two separately-shipped apps run *one* copy of React, not two, by agreeing on a version at load time. This is the runtime backbone of micro-frontends (Webpack's `ModuleFederationPlugin`, or Vite's native-federation built on the import maps of §1). The cost is the tradeoff Module 12 names: runtime coupling between deploys you no longer build together — a shared-dependency version skew becomes a *production* failure, not a build error. It buys org-scale team autonomy at the price of a new failure surface.
 
-> **Self-Test:**
-> Two micro-frontends built by different teams both depend on React, yet the shell loads only one copy. What mechanism made that happen, and what class of bug does it introduce that a single monolithic build never had? *(Module Federation's **shared singleton** negotiation: host and remote both declare React as `shared`, and at load time they agree on one instance instead of each bundling its own. The new failure mode is runtime version skew — ship incompatible React versions and there's no build step to catch it; hooks/context break only in production when the federated remote actually loads. Independent deploys trade build-time safety for runtime coupling.)*
+<SelfTest>
+
+Two micro-frontends built by different teams both depend on React, yet the shell loads only one copy. What mechanism made that happen, and what class of bug does it introduce that a single monolithic build never had?
+
+<template #answer>
+
+Module Federation's **shared singleton** negotiation: host and remote both declare React as `shared`, and at load time they agree on one instance instead of each bundling its own. The new failure mode is runtime version skew — ship incompatible React versions and there's no build step to catch it; hooks/context break only in production when the federated remote actually loads. Independent deploys trade build-time safety for runtime coupling.
+
+</template>
+</SelfTest>
 
 ## 6. The Two-Engine Consistency Tradeoff
 Dev uses native ESM + esbuild; production uses Rollup. Same source, two pipelines — and they can **disagree**. A module-execution-order edge case, a CSS-injection timing difference, or a dependency that behaves differently bundled vs. unbundled can produce "works in dev, breaks in build." This is the structural weakness of the fast-dev-server approach.
 
 The industry's answer is to **unify the engines**: **[Rolldown](https://rolldown.rs/)**, a Rust bundler from the Vite team, is being adopted (opt-in `rolldown-vite` as of this writing) to handle *both* dev pre-bundling and production output — eliminating the dev/prod gap and the cost of maintaining two code paths. It's the same throughline as Module 7: the more the toolchain shares one representation, the fewer surprises leak through. For the from-scratch version of a module graph + HMR, build the [mini bundler](/module-9-build-things) in Module 9.
 
-> **Self-Test:**
-> A feature works perfectly under `npm run dev` but throws in the `npm run build` output. Name two structural reasons this whole class of bug exists. (1) Dev serves unbundled native ESM while production runs Rollup — different module concatenation, execution order, and dead-code elimination. 2) Dependencies are esbuild-prebundled in dev but Rollup-bundled for build, so a dep relying on a specific interop or side-effect can resolve differently. The fix at the ecosystem level is a single unified bundler for both phases.)
+<SelfTest>
+
+A feature works perfectly under `npm run dev` but throws in the `npm run build` output. Name two structural reasons this whole class of bug exists.
+
+<template #answer>
+
+1) Dev serves unbundled native ESM while production runs Rollup — different module concatenation, execution order, and dead-code elimination. 2) Dependencies are esbuild-prebundled in dev but Rollup-bundled for build, so a dep relying on a specific interop or side-effect can resolve differently. The fix at the ecosystem level is a single unified bundler for both phases.
+
+</template>
+</SelfTest>

@@ -43,6 +43,10 @@ learn:
     - "wasm-bindgen"
     - "WebAssembly spec"
   teachingApproach: "Follow one function call across the JS↔Wasm boundary and account for every copy."
+  recall:
+    - "From memory: how do V8's Ignition and TurboFan tiers run JavaScript (module 1), and which speculative bets — inline-cache shapes, deopt — do they make that a statically-typed Wasm module never needs?"
+    - "Before reading: why does growing or resizing an ArrayBuffer detach every typed-array view into it (module 1's heap/typed-array model), and what happens on the next access to a stale view?"
+    - "From memory: what do Web Workers and transferable objects give the single-threaded event loop (module 10), and how is that different from several threads sharing one SharedArrayBuffer?"
 ---
 
 # Module 13: WebAssembly & Systems Integration
@@ -106,8 +110,16 @@ sequenceDiagram
     Glue->>JS: decode to JS value
 ```
 
-> **Self-Test:**
-> You move an image filter to Rust/Wasm and it's *slower* than the JS version. The pixels are a `Uint8Array`. What's the likely cause, and what's the fix? (Likely: you're copying the buffer across the boundary every call. Fix: allocate the pixel buffer *inside* Wasm linear memory once, expose it as a typed-array view, and mutate in place — pass a pointer, not the data. And remember §3: if the module ever calls `memory.grow`, re-create that view.)
+<SelfTest>
+
+You move an image filter to Rust/Wasm and it's *slower* than the JS version. The pixels are a `Uint8Array`. What's the likely cause, and what's the fix?
+
+<template #answer>
+
+Likely: you're copying the buffer across the boundary every call. Fix: allocate the pixel buffer *inside* Wasm linear memory once, expose it as a typed-array view, and mutate in place — pass a pointer, not the data. And remember §3: if the module ever calls `memory.grow`, re-create that view.
+
+</template>
+</SelfTest>
 
 ## 5. Threads & The Future Runtime
 This is where "beyond JavaScript" gets real.
@@ -116,8 +128,16 @@ This is where "beyond JavaScript" gets real.
 * **[SIMD](https://github.com/WebAssembly/simd):** 128-bit vector instructions process multiple lanes per op — big for media and ML kernels.
 * **WASI & the Component Model:** The **[WebAssembly System Interface](https://github.com/WebAssembly/WASI)** standardizes capabilities (files, clocks, sockets) so Wasm runs outside the browser — on edge runtimes and servers (Module 15). The **Component Model** defines language-agnostic interfaces so a Rust module and a Python module can compose by contract. This is the actual "future runtime": one portable, sandboxed binary format from the browser tab to the edge node.
 
-> **Self-Test:**
-> Wasm threads need `SharedArrayBuffer`, which a plain page can't use without sending `COOP`/`COEP` headers. Why does sharing a buffer across threads specifically re-enable Spectre-style attacks — and what do those headers cut off? (A shared buffer + atomics gives an attacker a high-resolution timer and a way to observe cache effects across origins; cross-origin isolation severs the page from cross-origin documents/resources that could be used as the read gadget.)
+<SelfTest>
+
+Wasm threads need `SharedArrayBuffer`, which a plain page can't use without sending `COOP`/`COEP` headers. Why does sharing a buffer across threads specifically re-enable Spectre-style attacks — and what do those headers cut off?
+
+<template #answer>
+
+A shared buffer + atomics gives an attacker a high-resolution timer and a way to observe cache effects across origins; cross-origin isolation severs the page from cross-origin documents/resources that could be used as the read gadget.
+
+</template>
+</SelfTest>
 
 ## 6. Porting Native Code (A Worked Example)
 The boundary rule from §4 — *pass a pointer, not the data* — stays abstract until you port something. Here is the whole pattern for a CPU-bound kernel: invert the RGBA pixels of an image, the kind of per-pixel loop where JS's number boxing and bounds checks cost you and a compiled language doesn't.
@@ -188,5 +208,13 @@ const freshView = (ptr, len) => new Uint8Array(memory.buffer, ptr, len)
 ### wasm-bindgen does exactly this — don't let it hide the cost
 [`wasm-bindgen`](https://github.com/wasm-bindgen/wasm-bindgen) lets you write `pub fn invert(pixels: &mut [u8])` and call `invert(jsArray)` directly. Convenient — but it generates the *same* `alloc` + copy-in + pointer-pass + copy-out you just wrote by hand. It is not free; it is automated. Call it once per small tile in a hot loop and you are back to per-call copies, and may lose to plain JS. The §4 model doesn't change because a tool wrote the glue.
 
-> **Self-Test:**
-> Your `invert` kernel is correct, but a teammate "optimizes" it by calling Wasm once per 16×16 tile (to parallelize later) and throughput drops below the original JS. Why — and what stayed expensive even though no pixel data is "returned"? *(Each tile call does its own `alloc` + copy-in + copy-out across the boundary; with hundreds of tiles per frame the fixed per-call copy + trampoline overhead dominates the tiny compute per tile. Mutating "in place" doesn't help when you re-establish and re-copy the buffer every call. One call over the whole frame — or one shared buffer reused across tile calls with no re-copy — is what makes Wasm win.)*
+<SelfTest>
+
+Your `invert` kernel is correct, but a teammate "optimizes" it by calling Wasm once per 16×16 tile (to parallelize later) and throughput drops below the original JS. Why — and what stayed expensive even though no pixel data is "returned"?
+
+<template #answer>
+
+Each tile call does its own `alloc` + copy-in + copy-out across the boundary; with hundreds of tiles per frame the fixed per-call copy + trampoline overhead dominates the tiny compute per tile. Mutating "in place" doesn't help when you re-establish and re-copy the buffer every call. One call over the whole frame — or one shared buffer reused across tile calls with no re-copy — is what makes Wasm win.
+
+</template>
+</SelfTest>

@@ -29,7 +29,7 @@ learn:
     - "templates are magic (the compiler lexes {{ }} and emits render-function calls)"
     - "tree shaking is automatic (it needs ESM + sideEffects + no CJS interop)"
     - "pure annotations let you delete any code (only unused call results; side effects in args remain)"
-  selfTests: 3
+  selfTests: 5
   primarySources:
     - "Babel"
     - "esbuild"
@@ -37,6 +37,10 @@ learn:
     - "acorn"
     - "Vue compiler"
   teachingApproach: "Treat the parser as a function from text to a tree, then transform the tree to make the lesson concrete."
+  recall:
+    - "From memory: before V8 can run your code (Module 1), what does it parse the raw source string into, and why can't the engine execute the text directly?"
+    - "From memory: an AST is a tree — how does a depth-first traversal reach every node (Module 6), and why is recursion (basic recursion) the natural way to walk one?"
+    - "Before reading: how do ESM `import`/`export` bindings differ from CommonJS `require` (JS modules), and which of the two can a tool resolve without running the code?"
 ---
 
 # Module 7: Code as Data (Compilers & ASTs)
@@ -71,8 +75,16 @@ flowchart LR
 
 * **How expression precedence is actually handled:** A recursive-descent parser *can* encode precedence, but needs roughly one grammar rule (and one function) per precedence level — a tall cascade for a language with ~20 levels. **Pratt parsing** (operator-precedence / "binding power") collapses that: each operator carries a binding strength, and the parser greedily consumes a right operand only while the next operator binds *tighter*. One loop handles all levels, plus prefix and right-associative operators uniformly. That's the mechanism that makes `*` grab its neighbors before `+`.
 
-> **Self-Test:**
-> How does `<div>{{ message }}</div>` become executable JavaScript? The template compiler lexes it into tokens (`tagOpen`, `interpolation`, `tagClose`), parses that into a template AST, then *generates* a render function: roughly `createElementVNode("div", null, toDisplayString(ctx.message))`. The braces aren't magic — they're a node type the compiler knows how to emit code for.
+<SelfTest>
+
+How does `<div>{{ message }}</div>` become executable JavaScript?
+
+<template #answer>
+
+The template compiler lexes it into tokens (`tagOpen`, `interpolation`, `tagClose`), parses that into a template AST, then *generates* a render function: roughly `createElementVNode("div", null, toDisplayString(ctx.message))`. The braces aren't magic — they're a node type the compiler knows how to emit code for.
+
+</template>
+</SelfTest>
 
 ## 2. AST Transforms & the Visitor Pattern
 Once code is an AST, it's a data structure you can walk and rewrite.
@@ -80,8 +92,27 @@ Once code is an AST, it's a data structure you can walk and rewrite.
 * **The visitor pattern:** Tools like [Babel](https://babeljs.io/docs/)/[SWC](https://swc.rs/docs/getting-started) [traverse the tree](https://github.com/jamiebuilds/babel-handbook/blob/master/translations/en/plugin-handbook.md#visitors) depth-first, calling a handler on **enter** and **exit** of each node type. You get a `path` (the node plus its parent links and **scope**/binding info), and you mutate through it — replace a node, insert a sibling, rename a binding. Scope tracking is what lets a transform rename a variable safely without clobbering an unrelated one of the same name.
 * **Babel in one sentence:** parse modern syntax (e.g. [optional chaining](https://tc39.es/ecma262/#sec-optional-chains) `?.`) → find those nodes → replace them with equivalent older-syntax nodes → regenerate.
 
-> **Self-Test:**
-> A transform renames every top-level `const x` to `const _x`. Why does it *need* the path's scope/binding information rather than a string find-replace on `x`? (A blind rename clobbers an unrelated `x` in a nested function, a property key `obj.x`, or a string `"x"`; only binding info knows which identifiers actually *refer to* that declaration.)
+<SelfTest>
+
+A transform renames every top-level `const x` to `const _x`. Why does it *need* the path's scope/binding information rather than a string find-replace on `x`?
+
+<template #answer>
+
+A blind rename clobbers an unrelated `x` in a nested function, a property key `obj.x`, or a string `"x"`; only binding info knows which identifiers actually *refer to* that declaration.
+
+</template>
+</SelfTest>
+
+<SelfTest variant="run">
+
+Open [astexplorer.net](https://astexplorer.net) (parser: `@babel/parser`) and paste `a?.b.c`. Predict first: is the whole expression one node or a nested tree — and which link carries the `optional` flag?
+
+<template #answer>
+
+A **left-nested tree**, not one node: an `OptionalMemberExpression` for `.c` whose `object` is another `OptionalMemberExpression` for `a?.b`. Only the `?.` link is `optional: true`; `.c` is `optional: false`. The short-circuit ("if `a` is nullish the whole chain yields `undefined`") is *semantics* layered on that tree — the parser only records which link was optional. Watching flat surface syntax become a nested node structure is exactly §2's point: transforms operate on the tree, never the text.
+
+</template>
+</SelfTest>
 
 ## 3. Static Analysis: Tree Shaking (and Why It's Subtle)
 Compilers don't just transform; they analyze to *remove* code.
@@ -89,8 +120,16 @@ Compilers don't just transform; they analyze to *remove* code.
 * **Why ESM is shakeable and CommonJS is not:** [`import`/`export`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules) are **static** — bindings are known before the code runs, so a bundler can build an exact import/export graph and drop unreferenced exports. `require()` is a dynamic function call; its target can be computed at runtime, so the analysis can't prove an export is dead.
 * **The side-effect problem:** A bundler can't drop `import './polyfill'` even if nothing's imported from it — the module might mutate globals. So it must be *told* what's safe: [`"sideEffects": false`](https://rollupjs.org/configuration-options/#treeshake-modulesideeffects) in `package.json`, and [`/*#__PURE__*/`](https://rollupjs.org/configuration-options/#treeshake-annotations) annotations. That annotation marks a specific **call or `new` expression** as side-effect-free, so the bundler may drop it *if its result is unused* — it doesn't make arbitrary code removable. (It's a *promise* the bundler trusts: if the call's arguments themselves have side effects, a misapplied `/*#__PURE__*/` silently drops them — a real bug class.) Without these hints, "dead" code survives because the compiler is (correctly) conservative.
 
-> **Self-Test:**
-> A utility library is authored in ESM with named exports, yet importing one function still pulls in the whole bundle. Name two likely causes. (1) Missing `"sideEffects": false`, so the bundler assumes module-level side effects; 2) the package actually ships **CommonJS** — `require`-based, so its exports can't be statically proven dead. Re-exporting through a CJS barrel file defeats shaking the same way.)
+<SelfTest>
+
+A utility library is authored in ESM with named exports, yet importing one function still pulls in the whole bundle. Name two likely causes.
+
+<template #answer>
+
+1) Missing `"sideEffects": false`, so the bundler assumes module-level side effects; 2) the package actually ships **CommonJS** — `require`-based, so its exports can't be statically proven dead. Re-exporting through a CJS barrel file defeats shaking the same way.
+
+</template>
+</SelfTest>
 
 ## 4. The Optimizing Template Compiler (Vue)
 A framework compiler can do far more than emit a render function — it can encode *runtime hints* that make diffing cheaper.
@@ -114,8 +153,16 @@ flowchart TD
 
 This is the throughline of Modules 3–5: **the more the compiler knows statically, the less the runtime has to do.**
 
-> **Self-Test:**
-> Why can a patch flag turn an O(nodes-in-subtree) diff into O(dynamic-bindings)? (The flag tells the runtime *exactly* which props/children are dynamic, so it skips the entire static remainder instead of walking and comparing it — the compiler already proved it can't change.)
+<SelfTest>
+
+Why can a patch flag turn an O(nodes-in-subtree) diff into O(dynamic-bindings)?
+
+<template #answer>
+
+The flag tells the runtime *exactly* which props/children are dynamic, so it skips the entire static remainder instead of walking and comparing it — the compiler already proved it can't change.
+
+</template>
+</SelfTest>
 
 ## 5. Code Generation & Source Maps
 * **Codegen:** Walk the final AST and print it back to a string — the executable JS shipped to the browser.

@@ -37,6 +37,10 @@ learn:
     - "SharedArrayBuffer & Atomics"
     - "OffscreenCanvas"
   teachingApproach: "Frame every API as relief for the single-main-thread constraint, then show the cost it trades for that relief."
+  recall:
+    - "From memory (Module 2): why does reading an element's geometry (e.g. getBoundingClientRect) inside a scroll or resize handler force a synchronous layout, and what does the browser have to flush before it can answer?"
+    - "From memory (Module 1): how does a microtask differ from a macrotask in when it drains relative to the current task, and why does that place a MutationObserver callback ahead of a setTimeout scheduled in the same task?"
+    - "Before reading: which kinds of work share the browser's one main thread, and why does a long synchronous computation there freeze rendering and input alike?"
 ---
 
 # Module 10: Browser APIs as Architecture
@@ -50,8 +54,16 @@ Before observers, watching for "did this element resize / scroll into view / cha
 * **[`ResizeObserver`](https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver) — element size changes:** Fires when an element's content box changes, for *any* reason (not just window resize). Delivery timing is the subtle part: it runs **after layout, before paint**, so it observes already-computed sizes. The spec runs observations in a loop with a depth guard — if your callback resizes an observed element, triggering another layout, you'll hit **[`ResizeObserver loop limit exceeded`](https://www.w3.org/TR/resize-observer/)**. That's not a crash; the browser defers the remaining notifications to the next frame to break the cycle. Seeing that warning means your callback is fighting the layout it's reacting to.
 * **[`IntersectionObserver`](https://developer.mozilla.org/en-US/docs/Web/API/IntersectionObserver) — visibility:** Reports when an element crosses a `threshold` of overlap with a `root` (default: the viewport), expandable via `rootMargin`. The intersection math runs **asynchronously, off the main thread**, and is delivered post-render — which is exactly why it replaced scroll-listener visibility checks for lazy-loading images and infinite scroll. No layout thrash, no scroll-handler jank.
 
-> **Self-Test:**
-> A lazy-image implementation uses a throttled `scroll` listener that reads `getBoundingClientRect()` on every image; it janks. Why does swapping to `IntersectionObserver` fix the *cause*, not just the symptom? (The scroll handler forces a synchronous layout on every fire to read rects — work on the main thread, in the scroll critical path. `IntersectionObserver` computes intersections asynchronously off the main thread and notifies only on threshold crossings, so the per-scroll layout cost disappears entirely instead of being merely throttled.)
+<SelfTest>
+
+A lazy-image implementation uses a throttled `scroll` listener that reads `getBoundingClientRect()` on every image; it janks. Why does swapping to `IntersectionObserver` fix the *cause*, not just the symptom?
+
+<template #answer>
+
+The scroll handler forces a synchronous layout on every fire to read rects — work on the main thread, in the scroll critical path. `IntersectionObserver` computes intersections asynchronously off the main thread and notifies only on threshold crossings, so the per-scroll layout cost disappears entirely instead of being merely throttled.
+
+</template>
+</SelfTest>
 
 *Scroll-listener polling forces a synchronous layout on every event; IntersectionObserver computes off the main thread and notifies post-render.*
 
@@ -78,8 +90,16 @@ Transferables move ownership; sometimes you need *two threads reading and writin
 * **Shared memory means data races — `Atomics` is the fix:** Two threads writing the same SAB slot is undefined without synchronization. `Atomics.add`, `Atomics.compareExchange`, etc. perform race-free read-modify-write. [`Atomics.wait(view, i, expected)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Atomics/wait) **blocks** a worker thread until `Atomics.notify` wakes it — a real semaphore. `wait` is forbidden on the main thread (blocking it would freeze the page), which tells you the intended shape: workers coordinate via SAB while the main thread stays responsive.
 * This shared-memory + atomics model is the foundation for true multi-threaded parallelism on the web — the same machinery underlying any worker pool that coordinates over shared state instead of copying it.
 
-> **Self-Test:**
-> You add a Web Worker that uses `SharedArrayBuffer`, but `crossOriginIsolated` is `false` and the SAB constructor isn't even defined. What's missing, and why does the platform make you jump through it? (You haven't sent `COOP: same-origin` + `COEP: require-corp`, so the document isn't cross-origin isolated. SAB exposes precise shared-memory timing usable in a Spectre attack, so browsers gate it behind isolation that guarantees no untrusted cross-origin content shares your process.)
+<SelfTest>
+
+You add a Web Worker that uses `SharedArrayBuffer`, but `crossOriginIsolated` is `false` and the SAB constructor isn't even defined. What's missing, and why does the platform make you jump through it?
+
+<template #answer>
+
+You haven't sent `COOP: same-origin` + `COEP: require-corp`, so the document isn't cross-origin isolated. SAB exposes precise shared-memory timing usable in a Spectre attack, so browsers gate it behind isolation that guarantees no untrusted cross-origin content shares your process.
+
+</template>
+</SelfTest>
 
 ## 4. OffscreenCanvas: Rendering Without the DOM
 Canvas rendering normally happens on the main thread, tied to a DOM `<canvas>`. A heavy chart or WebGL scene then competes with layout, paint, and input. **`OffscreenCanvas`** decouples the drawing surface from the DOM so it can be driven from a worker.
@@ -90,5 +110,13 @@ Canvas rendering normally happens on the main thread, tied to a DOM `<canvas>`. 
 ## The Throughline
 Every API here is the browser handing you a way to *not* do work on the main thread, or to *not* poll: observers notify instead of you checking; workers compute elsewhere; SAB shares memory instead of copying; OffscreenCanvas draws elsewhere. When you reach the [from-scratch builds](/module-9-build-things) in Module 9 — a virtual scroller, a scheduler — these are the primitives you compose. Knowing *why each exists* is what lets you pick the right one before profiling tells you the naïve version was wrong.
 
-> **Self-Test:**
-> Name the single architectural pressure that motivates `IntersectionObserver`, Web Workers, *and* `OffscreenCanvas`. (The browser gives your page exactly **one main thread**, shared by JS, layout, paint, and input. Each API is a different strategy for not overloading it — observe without main-thread polling, compute on another thread, render on another thread. The constraint is the thread; the APIs are the relief valves.)
+<SelfTest>
+
+Name the single architectural pressure that motivates `IntersectionObserver`, Web Workers, *and* `OffscreenCanvas`.
+
+<template #answer>
+
+The browser gives your page exactly **one main thread**, shared by JS, layout, paint, and input. Each API is a different strategy for not overloading it — observe without main-thread polling, compute on another thread, render on another thread. The constraint is the thread; the APIs are the relief valves.
+
+</template>
+</SelfTest>

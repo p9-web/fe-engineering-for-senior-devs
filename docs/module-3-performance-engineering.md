@@ -27,12 +27,16 @@ learn:
     - "optimize first, measure later (you optimize the wrong thing)"
     - "the bottleneck is where you think it is"
     - "a smooth 60fps animation just needs requestAnimationFrame"
-  selfTests: 3
+  selfTests: 4
   primarySources:
     - "Chrome DevTools (Performance & Memory panels)"
     - "web.dev (INP / Core Web Vitals)"
     - "V8 heap snapshots"
   teachingApproach: "Start from a trace, not a theory — read what the profiler shows, then change one thing and re-measure."
+  recall:
+    - "From memory: name the stages of the pixel pipeline from style to screen, and say which ones a transform-only animation running on the compositor can skip."
+    - "Before reading: why can a detached DOM node survive garbage collection, given how generational GC decides what to keep alive?"
+    - "From memory: what is the 16.67ms frame budget, and why does a 200ms macrotask on the main thread block both rendering and input?"
 ---
 
 # Module 3: Performance Engineering
@@ -72,8 +76,42 @@ items.forEach((el, i) => (el.style.height = heights[i] + 10 + 'px')) // write ph
 
 The fix is structural (read phase, then write phase), not a micro-optimization. [`requestAnimationFrame`](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame) is the natural place to do the write phase.
 
-> **Self-Test:**
-> A trace shows a single 180ms scripting task with a row of ~50 purple "Layout" slivers inside it, each flagged "Forced reflow." What is the code doing, and why does moving every DOM *read* to before every DOM *write* collapse 50 layouts into 1? (The loop reads geometry — `offsetHeight`/`getBoundingClientRect` — after writing a style, so each read finds layout dirty and forces a synchronous recompute. Separating the phases means all writes dirty layout once, and the next read triggers exactly one flush.)
+<SelfTest>
+
+A trace shows a single 180ms scripting task with a row of ~50 purple "Layout" slivers inside it, each flagged "Forced reflow." What is the code doing, and why does moving every DOM *read* to before every DOM *write* collapse 50 layouts into 1?
+
+<template #answer>
+
+The loop reads geometry — `offsetHeight`/`getBoundingClientRect` — after writing a style, so each read finds layout dirty and forces a synchronous recompute. Separating the phases means all writes dirty layout once, and the next read triggers exactly one flush.
+
+</template>
+</SelfTest>
+
+<SelfTest variant="run">
+
+Paste this into the console on any content-heavy page (this one works). Predict the `ratio` before you look — then reload to undo the visual mangling:
+
+```js
+const els = [...document.querySelectorAll('*')].slice(0, 400)
+
+let t = performance.now()
+for (const el of els) el.style.width = el.offsetWidth + 1 + 'px'   // read-after-write
+const interleaved = performance.now() - t
+
+t = performance.now()
+const w = els.map((el) => el.offsetWidth)                          // all reads
+els.forEach((el, i) => (el.style.width = w[i] + 1 + 'px'))         // all writes
+const batched = performance.now() - t
+
+console.log({ interleaved, batched, ratio: interleaved / batched })
+```
+
+<template #answer>
+
+`interleaved` is far slower — commonly 10–50× on a page this size, widening with element count. Every write in the first loop invalidates layout, so the next `offsetWidth` forces a synchronous re-layout: ~400 flushes. The batched loop reads against one clean layout, then writes without reading, dirtying layout just once. The absolute milliseconds depend on the page and machine; the **ratio** and its cause — one forced reflow per read-after-write — are the invariant. This is §3's "purple slivers" reproduced on demand.
+
+</template>
+</SelfTest>
 
 ## 4. Memory: Snapshots, Retainers, and Detached DOM
 Module 1 explained generational GC; this is how you find what the GC *can't* collect because you're still holding it.
@@ -90,8 +128,16 @@ function render(node) {
 // Fix: don't retain, or use a WeakRef / WeakMap so the node can be reclaimed.
 ```
 
-> **Self-Test:**
-> Heap grows ~2MB on every client-side route change and never drops. A snapshot diff shows hundreds of detached `<div>` nodes retained by an object called `(array)`. How do you confirm the cause and fix it? (Follow the retainer path from a detached node to its GC root — here a module-level array still pushing nodes. Confirm by checking the array grows once per navigation; fix by clearing it on unmount, scoping it to the component, or holding nodes weakly so GC can reclaim them.)
+<SelfTest>
+
+Heap grows ~2MB on every client-side route change and never drops. A snapshot diff shows hundreds of detached `<div>` nodes retained by an object called `(array)`. How do you confirm the cause and fix it?
+
+<template #answer>
+
+Follow the retainer path from a detached node to its GC root — here a module-level array still pushing nodes. Confirm by checking the array grows once per navigation; fix by clearing it on unmount, scoping it to the component, or holding nodes weakly so GC can reclaim them.
+
+</template>
+</SelfTest>
 
 ## 5. Responsiveness: Long Tasks, INP, and Yielding
 The metric that captures "does the app feel fast" is **[INP — Interaction to Next Paint](https://web.dev/articles/inp)**: the time from a user input to the next frame that reflects it. A long task sitting between the click and the paint is what wrecks it.
@@ -106,5 +152,13 @@ Two habits separate engineers who profile from engineers who guess:
 * **Measure in production-like conditions.** Your dev machine lies. Use DevTools CPU throttling (4–6×) and test on a real mid-tier phone — the bottleneck on a throttled device is often nowhere near the one on an M-series laptop.
 * **Make falsifiable claims.** "This is faster" is not a result; "p75 INP dropped from 240ms to 90ms on a 4× throttle" is. That honesty about measurement is the same judgment you'll sharpen in [Module 11](/module-11-source-code-judgment) — a benchmark that doesn't account for the JIT or warm-up is worse than no benchmark.
 
-> **Self-Test:**
-> A colleague reports a function is "way faster" after a rewrite, timing it with `Date.now()` around a single call in dev. Name two reasons that number is meaningless, and what you'd capture instead. (One call doesn't let the JIT reach steady state and `Date.now()` has coarse resolution; the dev machine isn't the target device. Capture: many warm iterations under CPU throttling with [`performance.now()`](https://developer.mozilla.org/en-US/docs/Web/API/Performance/now), or better, a real Performance-panel trace on a throttled mid-tier device, reported as a percentile.)
+<SelfTest>
+
+A colleague reports a function is "way faster" after a rewrite, timing it with `Date.now()` around a single call in dev. Name two reasons that number is meaningless, and what you'd capture instead.
+
+<template #answer>
+
+One call doesn't let the JIT reach steady state and `Date.now()` has coarse resolution; the dev machine isn't the target device. Capture: many warm iterations under CPU throttling with [`performance.now()`](https://developer.mozilla.org/en-US/docs/Web/API/Performance/now), or better, a real Performance-panel trace on a throttled mid-tier device, reported as a percentile.
+
+</template>
+</SelfTest>

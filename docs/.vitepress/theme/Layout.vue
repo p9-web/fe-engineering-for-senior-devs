@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import DefaultTheme from 'vitepress/theme-without-fonts'
 import StudyGuide from './StudyGuide.vue'
-import { icon } from '../icons'
+import ProgressToggle from './ProgressToggle.vue'
 
 const { Layout } = DefaultTheme
 </script>
@@ -12,35 +12,9 @@ const { Layout } = DefaultTheme
     <template #doc-before>
       <StudyGuide />
     </template>
-    <!-- terminal status line at the foot of every doc page -->
+    <!-- per-module "mark complete" toggle + progress meter (module pages only) -->
     <template #doc-footer-before>
-      <div class="terminal-status"><span class="lic" v-html="icon('terminal', 13)" />from silicon to the screen</div>
+      <ProgressToggle />
     </template>
   </Layout>
 </template>
-
-<style>
-.terminal-status {
-  display: flex;
-  align-items: center;
-  margin-top: 8px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--vp-c-divider);
-  font-family: var(--vp-font-family-mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--vp-c-text-3);
-}
-.terminal-status .lic {
-  color: var(--silicon-prompt);
-}
-.terminal-status::after {
-  content: '_';
-  margin-left: 2px;
-  color: var(--silicon-prompt);
-  animation: silicon-blink 1.1s step-end infinite;
-}
-@keyframes silicon-blink {
-  50% { opacity: 0; }
-}
-</style>

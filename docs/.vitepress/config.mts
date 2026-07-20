@@ -65,6 +65,7 @@ type Learn = {
   selfTests: number
   primarySources?: string[]
   teachingApproach: string
+  recall?: string[] // on-page retrieval prompts (rendered by StudyGuide.vue); not emitted to crawler metadata
 }
 
 // Collected per page during transformPageData, consumed in buildEnd to emit llms.txt.
@@ -281,7 +282,7 @@ export default defineConfig({
       },
     ],
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/vuejs/vitepress' },
+      { icon: 'github', link: 'https://github.com/p9-web' },
     ],
   },
 })

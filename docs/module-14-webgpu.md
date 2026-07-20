@@ -30,12 +30,16 @@ learn:
     - "more workgroups is always faster (occupancy and readback cost dominate small jobs)"
     - "you can read a storage buffer directly from JS (you must copy to a MAP_READ staging buffer first)"
     - "WebGPU is only for graphics (compute shaders offload pure data-parallel math, no pixels involved)"
-  selfTests: 3
+  selfTests: 5
   primarySources:
     - "WebGPU specification (W3C)"
     - "WGSL specification (W3C)"
     - "Chrome GPU / Dawn docs"
   teachingApproach: "Send one array of numbers to the GPU, double each element, read it back — and account for every copy and every await along the way."
+  recall:
+    - "From memory: how does a transferable hand an ArrayBuffer to a Worker (module 10) with zero copy, and why does no equivalent zero-copy path exist across the CPU→GPU bus?"
+    - "From memory: what made the JS↔Wasm boundary costly (module 13), and why does that same copy-cost reasoning apply — more harshly — to moving typed arrays in and out of GPU buffers?"
+    - "Before reading: why must work that stalls the single JS thread (module 1) be awaited rather than blocked on, and how does that shape the way you retrieve GPU results?"
 ---
 
 # Module 14: WebGPU & Compute Shaders
@@ -49,8 +53,16 @@ A CPU core is a sprinter: deep pipelines, branch prediction, big caches, optimiz
 * **What kills it — divergence:** because a wave shares one program counter, an `if` that sends some lanes one way and some the other forces the hardware to run *both* branches with the inactive lanes masked off. Branchy, data-dependent code serializes and wastes lanes. The GPU punishes exactly the control flow the CPU's branch predictor was built to love.
 * **The other tax — the bus:** the GPU has its own memory. Getting data there and (especially) back crosses a boundary even more expensive than JS↔Wasm (§5). The GPU only wins when *compute per byte transferred* is high.
 
-> **Self-Test:**
-> You move a function over a 10-million-element `Float32Array` to a WebGPU compute shader and it's *slower* than a plain JS loop. The function is `out[i] = Math.sqrt(in[i])`. What two costs likely swamped the win, and what property of the workload made this a bad GPU candidate? *(Upload of the input buffer + readback of the output buffer dominate, because the compute per element — a single sqrt — is trivial. Low arithmetic intensity (work per byte moved) is the tell: the GPU is starved by transfer, not compute. It pays off when each element does a lot of math, or when the data already lives on the GPU and never comes back.)*
+<SelfTest>
+
+You move a function over a 10-million-element `Float32Array` to a WebGPU compute shader and it's *slower* than a plain JS loop. The function is `out[i] = Math.sqrt(in[i])`. What two costs likely swamped the win, and what property of the workload made this a bad GPU candidate?
+
+<template #answer>
+
+Upload of the input buffer + readback of the output buffer dominate, because the compute per element — a single sqrt — is trivial. Low arithmetic intensity (work per byte moved) is the tell: the GPU is starved by transfer, not compute. It pays off when each element does a lot of math, or when the data already lives on the GPU and never comes back.
+
+</template>
+</SelfTest>
 
 ## 2. The Device Pipeline: adapter → device → queue
 You don't just "call the GPU." You negotiate access to it, and every step is async because it may involve the OS driver, another process (the GPU process), or hardware that can vanish.
@@ -68,6 +80,30 @@ const queue   = device.queue                            // where you submit work
 * **Queue** — the single ordered channel you push commands and buffer writes into. Work is **recorded** into command buffers and **submitted** to the queue; it executes asynchronously on the GPU timeline, not the JS one.
 
 The whole API is **retained-mode and validated up front**: you build immutable pipeline/layout objects once, then cheaply replay commands against them each frame. The expensive validation happens at creation, not per dispatch.
+
+<SelfTest variant="run">
+
+Run this in a Chromium console — no shader required. Predict, before running: is `maxComputeInvocationsPerWorkgroup` unlimited, or a specific cap?
+
+```js
+if (!navigator.gpu) console.log('WebGPU unavailable')
+else {
+  const a = await navigator.gpu.requestAdapter()
+  const L = a.limits
+  console.log({
+    maxComputeInvocationsPerWorkgroup: L.maxComputeInvocationsPerWorkgroup,
+    maxComputeWorkgroupSizeX: L.maxComputeWorkgroupSizeX,
+    maxComputeWorkgroupsPerDimension: L.maxComputeWorkgroupsPerDimension,
+  })
+}
+```
+
+<template #answer>
+
+A hard cap — the spec **floor** is `256` invocations per workgroup (`maxComputeWorkgroupSizeX` is 256 too, and workgroups-per-dimension 65535); real hardware may report higher, never lower. This is §2's point made concrete: you don't get an unbounded machine, you get an adapter that *advertises limits*, and your code must design within them. `@workgroup_size(64)` is safe; `@workgroup_size(1024)` may exceed the cap and fail pipeline creation, and a dispatch bigger than `maxComputeWorkgroupsPerDimension` is a validation error. Query first, size second.
+
+</template>
+</SelfTest>
 
 ## 3. Buffers & Bind Groups: getting data in
 GPU memory is not your `ArrayBuffer`. You allocate a `GPUBuffer`, declare what it's *for* with usage flags, and copy into it.
@@ -144,8 +180,16 @@ pass.end()
 device.queue.submit([encoder.finish()])
 ```
 
-> **Self-Test:**
-> A colleague writes `pass.dispatchWorkgroups(input.length)` with `@workgroup_size(64)` and the program is correct but ~64× slower than expected, and only the first element looks right. What did they confuse, and what's the fix? *(They dispatched one **workgroup per element**, launching `64 × input.length` invocations — 64× the work — while every invocation computed the same `gid.x` range per group, so most writes are redundant/wrong. `dispatchWorkgroups` takes the number of **workgroups**, not invocations: dispatch `Math.ceil(input.length / 64)`, and address elements via `global_invocation_id.x`.)*
+<SelfTest>
+
+A colleague writes `pass.dispatchWorkgroups(input.length)` with `@workgroup_size(64)` and the program is correct but ~64× slower than expected, and only the first element looks right. What did they confuse, and what's the fix?
+
+<template #answer>
+
+They dispatched one **workgroup per element**, launching `64 × input.length` invocations — 64× the work — while every invocation computed the same `gid.x` range per group, so most writes are redundant/wrong. `dispatchWorkgroups` takes the number of **workgroups**, not invocations: dispatch `Math.ceil(input.length / 64)`, and address elements via `global_invocation_id.x`.
+
+</template>
+</SelfTest>
 
 ## 5. The Readback Wall: getting data out
 This is where naïve WebGPU compute dies. You **cannot** read a `STORAGE` buffer from JS directly — a storage buffer can't be `MAP_READ`. You must copy it into a second, mappable **staging buffer**, then map *that*.
@@ -185,8 +229,16 @@ sequenceDiagram
     JS->>SB: read bytes, then unmap()
 ```
 
-> **Self-Test:**
-> Why does `mapAsync` return a *promise*, and what would go wrong if WebGPU let you read the storage buffer synchronously right after `submit()`? *(GPU work runs on its own timeline asynchronously; at the instant `submit()` returns, the compute almost certainly hasn't run yet. A synchronous read would either return stale/garbage memory or force a full pipeline stall blocking the main thread. `mapAsync` resolves only once the GPU has finished the work and the results are visible to the CPU, keeping the JS thread free in the meantime — the same "don't block the one thread" discipline as the rest of the platform.)*
+<SelfTest>
+
+Why does `mapAsync` return a *promise*, and what would go wrong if WebGPU let you read the storage buffer synchronously right after `submit()`?
+
+<template #answer>
+
+GPU work runs on its own timeline asynchronously; at the instant `submit()` returns, the compute almost certainly hasn't run yet. A synchronous read would either return stale/garbage memory or force a full pipeline stall blocking the main thread. `mapAsync` resolves only once the GPU has finished the work and the results are visible to the CPU, keeping the JS thread free in the meantime — the same "don't block the one thread" discipline as the rest of the platform.
+
+</template>
+</SelfTest>
 
 ## 6. When to Reach for It
 You now have three escalating ways to move work off the JS main thread. Pick by the *shape* of the work, not by novelty:
@@ -199,5 +251,13 @@ You now have three escalating ways to move work off the JS main thread. Pick by 
 
 The decision rule that ties the tier together: **WebGPU wins on arithmetic intensity (math per byte moved) and loses on transfer and divergence.** A particle system that lives on the GPU and is drawn from the same buffers is the canonical win; a single pass over an array you immediately read back is usually a Wasm or even plain-JS job.
 
-> **Self-Test:**
-> You're building a 100k-particle simulation at 60fps. Why is "simulate on the GPU and render from the same buffers" categorically better than "simulate in a Web Worker and upload positions each frame" — even if the per-particle math is identical? *(The Worker version pays an upload of all 100k positions every frame across the CPU→GPU bus, plus serialization to/from the worker; the data round-trips constantly. The GPU version keeps positions resident in GPU buffers and the render pass reads the *same* buffers the compute pass wrote — zero readback, zero per-frame upload. Arithmetic intensity stays high because the data never leaves the device. This residency, not raw FLOPS, is usually what decides GPU vs CPU.)*
+<SelfTest>
+
+You're building a 100k-particle simulation at 60fps. Why is "simulate on the GPU and render from the same buffers" categorically better than "simulate in a Web Worker and upload positions each frame" — even if the per-particle math is identical?
+
+<template #answer>
+
+The Worker version pays an upload of all 100k positions every frame across the CPU→GPU bus, plus serialization to/from the worker; the data round-trips constantly. The GPU version keeps positions resident in GPU buffers and the render pass reads the *same* buffers the compute pass wrote — zero readback, zero per-frame upload. Arithmetic intensity stays high because the data never leaves the device. This residency, not raw FLOPS, is usually what decides GPU vs CPU.
+
+</template>
+</SelfTest>

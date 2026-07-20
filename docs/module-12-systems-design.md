@@ -30,13 +30,17 @@ learn:
     - "DRY always wins (deduplicating incidental similarity creates coupling)"
     - "you can design the system correctly up front (you design for change, not prediction)"
     - "working code is the deliverable (the changeable codebase is the asset; all debt is bad — only silent, accidental debt compounds)"
-  selfTests: 4
+  selfTests: 5
   primarySources:
     - "Parnas, 'On the Criteria To Be Used in Decomposing Systems into Modules'"
     - "Hyrum's Law"
     - "real ADRs and Vue/React/Rust RFCs"
     - "Ousterhout, 'A Philosophy of Software Design'"
   teachingApproach: "Treat complexity as the real cost; for each principle, show the failure it prevents three years out."
+  recall:
+    - "From memory: how do Module 5's `track` and `trigger` propagate a state change to its dependents, and why does that make storing a derived value as its own source of truth a liability?"
+    - "Before reading: at an `await`, what does Module 1's event loop actually do, and what can mutate shared state before the next statement runs?"
+    - "From memory: which Module 4 HTTP-cache mechanism makes stale data unreachable instead of invalidating it, and what changes about the key when the content changes?"
 ---
 
 # Module 12: Systems Design & Complexity Management
@@ -50,8 +54,16 @@ Almost every design principle is a special case of this one.
 * The real cost of coupling is **change amplification**: one logical change forces edits in N places. When a one-line product change touches seven files, the design — not the change — is wrong. Coupling is the multiplier on the cost of every future change — the quantity §8 turns into an economic argument.
 * **Misconception — "DRY always wins."** Deduplicating code that is *incidentally* identical couples two things that will later need to change for different reasons. The shared helper that served the checkout page and the admin page becomes a knot the day they diverge. Prefer the **Rule of Three**, and remember: a little duplication is far cheaper than the wrong abstraction.
 
-> **Self-Test:**
-> A trivial product change ("admins see prices including tax") forces edits in seven files across three features. Name what's wrong and the shape of the fix. (High coupling / low cohesion: tax logic is duplicated or leaked across features instead of owned by one cohesive module. The fix is a boundary — a single pricing module the others call — so the rule lives in one place and the next change touches one file, not seven.)
+<SelfTest>
+
+A trivial product change ("admins see prices including tax") forces edits in seven files across three features. Name what's wrong and the shape of the fix.
+
+<template #answer>
+
+High coupling / low cohesion: tax logic is duplicated or leaked across features instead of owned by one cohesive module. The fix is a boundary — a single pricing module the others call — so the rule lives in one place and the next change touches one file, not seven.
+
+</template>
+</SelfTest>
 
 ## 2. Abstraction Boundaries (and Why They Leak)
 An abstraction is a promise: *you don't need to know what's behind this line.* A good boundary earns that promise; a bad one charges you the cost of indirection and still makes you look behind it.
@@ -79,8 +91,16 @@ The old joke names two hard problems; this is the second. [Module 4](/module-4-n
 * The strategies are few: **TTL** (accept bounded staleness), **write-through / event-based invalidation** (push updates on change), and **invalidation by identity** — content-hashing, where the key changes when the content does so stale data is simply unreachable. That last one (Module 4's `immutable` + hashed filenames) is powerful precisely because it *sidesteps* invalidation instead of solving it.
 * Decide the staleness budget *explicitly*. "It's cached" without an answer to "for how long, and what makes it wrong?" is a bug you haven't hit yet.
 
-> **Self-Test:**
-> A memoized selector returns a user's order total. After a mutation adds an item, the UI still shows the old total until a full reload. Classify the bug and give the principled fix. (It's cache invalidation, not a render bug: the memo cached a *derivation* of state and nothing invalidated it on write. Principled fix — derive the total reactively from the source list so it can never be stale, or key/invalidate the memo on the exact inputs that changed. Storing derived state is the root cause.)
+<SelfTest>
+
+A memoized selector returns a user's order total. After a mutation adds an item, the UI still shows the old total until a full reload. Classify the bug and give the principled fix.
+
+<template #answer>
+
+It's cache invalidation, not a render bug: the memo cached a *derivation* of state and nothing invalidated it on write. Principled fix — derive the total reactively from the source list so it can never be stale, or key/invalidate the memo on the exact inputs that changed. Storing derived state is the root cause.
+
+</template>
+</SelfTest>
 
 ## 6. Concurrency: Reason About Interleavings (ties Modules 1 & 10)
 JavaScript is single-threaded ([Module 1](/module-1-js-runtime)), but that does **not** make it race-free. Every [`await`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/await) is a yield point where other code runs and shared state can change underneath you.
@@ -97,6 +117,31 @@ async function increment() {
 
 * When you *do* add real parallelism — [Web Workers](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API) and [`SharedArrayBuffer`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer)/[`Atomics`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Atomics) from [Module 10](/module-10-browser-apis) — the same invariant discipline scales up, except now the races are simultaneous and `Atomics` is your only safe read-modify-write.
 
+<SelfTest variant="run">
+
+Single-threaded JavaScript, no workers. Predict what `count` logs after three concurrent increments, then run it in the console:
+
+```js
+let count = 0
+const store = {
+  async get() { await new Promise((r) => setTimeout(r)); return count },
+  async set(v) { await new Promise((r) => setTimeout(r)); count = v },
+}
+async function increment() {
+  const v = await store.get() // yield point
+  await store.set(v + 1)
+}
+await Promise.all([increment(), increment(), increment()])
+console.log(count)
+```
+
+<template #answer>
+
+`1`, not `3`. All three `increment`s reach `await store.get()` and suspend before any `set` runs, so each reads `count === 0`; then each writes `1`. Two updates are lost. No second thread is involved — every `await` is a yield point where the other calls interleave, which is precisely the invariant-across-await discipline of §6. The fix is to make read-modify-write atomic: serialize through one owner, or hold the value in a single source of truth instead of round-tripping it through a racy get/set.
+
+</template>
+</SelfTest>
+
 ## 7. Judgment: Put the Tradeoff in Writing (ties Module 11)
 The capstone skill, and the one that compounds: being the engineer who can say *"this architecture will fail in eighteen months because the state-propagation complexity is wrong"* — and be right.
 
@@ -104,8 +149,16 @@ The capstone skill, and the one that compounds: being the engineer who can say *
 * Distinguish **[one-way doors from two-way doors](https://www.aboutamazon.com/news/company-news/2016-letter-to-shareholders)** (Bezos): a reversible decision deserves a fast, cheap call; an irreversible one (a public API shape, a data model, a framework) deserves the ADR. Spend your judgment where it's expensive to undo.
 * This is the natural successor to [Module 11](/module-11-source-code-judgment): you've learned to read and judge the systems others built; now you design your own so the next reader's judgment is kind.
 
-> **Self-Test:**
-> You're choosing between a shared global store and prop-drilling for a new feature, and the team wants a decision in the standup. What makes this an ADR-worthy moment, and what must the ADR contain to be worth writing? (It shapes state ownership — closer to a one-way door than a two-way one, since unwinding a global store later is expensive. A worthwhile ADR states the context and constraints, the alternatives with their coupling/complexity tradeoffs, the decision, and the conditions under which you'd revisit it — so the choice is defensible and the next engineer inherits the *reasoning*, not just the result.)
+<SelfTest>
+
+You're choosing between a shared global store and prop-drilling for a new feature, and the team wants a decision in the standup. What makes this an ADR-worthy moment, and what must the ADR contain to be worth writing?
+
+<template #answer>
+
+It shapes state ownership — closer to a one-way door than a two-way one, since unwinding a global store later is expensive. A worthwhile ADR states the context and constraints, the alternatives with their coupling/complexity tradeoffs, the decision, and the conditions under which you'd revisit it — so the choice is defensible and the next engineer inherits the *reasoning*, not just the result.
+
+</template>
+</SelfTest>
 
 ## 8. The Economics of Change — Why Any of This Pays
 Every principle above is an *investment*, and this section is the model that says when it's worth making. Without it, "good design" sounds like taste; with it, you can defend the boundary you drew in a standup with a number, not an adjective.
@@ -117,5 +170,13 @@ Every principle above is an *investment*, and this section is the model that say
 
 The deliverable was never the code that runs today; AI can produce that on demand. The asset is a codebase that stays *cheap to change* — and complexity is just the name for everything that raises that price.
 
-> **Self-Test:**
-> A feature that took two days in year one takes two weeks in year three, on the same team. The code isn't slower and the engineers aren't worse — what got expensive, in this module's terms, and what earlier investment would have bent the curve? (Nothing about the *feature* changed; the **cost of change** rose. The slowdown is accrued complexity surfacing as change amplification (§1), cognitive load — more you must hold in your head before a change is safe — and unknown unknowns: you can't tell what a change will break. It compounded because each tactical shortcut raised the baseline for the next. The curve bends with strategic investment paid *continuously* — boundaries around what changes (§2), one source of truth so facts don't drift (§4) — not a year-three "big refactor," which is just repaying the whole loan at once, with penalties.)
+<SelfTest>
+
+A feature that took two days in year one takes two weeks in year three, on the same team. The code isn't slower and the engineers aren't worse — what got expensive, in this module's terms, and what earlier investment would have bent the curve?
+
+<template #answer>
+
+Nothing about the *feature* changed; the **cost of change** rose. The slowdown is accrued complexity surfacing as change amplification (§1), cognitive load — more you must hold in your head before a change is safe — and unknown unknowns: you can't tell what a change will break. It compounded because each tactical shortcut raised the baseline for the next. The curve bends with strategic investment paid *continuously* — boundaries around what changes (§2), one source of truth so facts don't drift (§4) — not a year-three "big refactor," which is just repaying the whole loan at once, with penalties.
+
+</template>
+</SelfTest>

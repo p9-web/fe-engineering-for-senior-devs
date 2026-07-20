@@ -29,13 +29,17 @@ learn:
     - "reactivity updates the DOM synchronously (Vue batches to a microtask)"
     - "the virtual DOM recomputes the whole tree on every change"
     - "compiled reactivity has zero runtime cost"
-  selfTests: 3
+  selfTests: 2
   primarySources:
     - "Vue 3 reactivity"
     - "SolidJS signals"
     - "React"
     - "Svelte compiler"
   teachingApproach: "Start from the dependency a getter must record, then build track/trigger up to a scheduler."
+  recall:
+    - "From memory: what arguments does a Proxy `get` trap receive, and how does its `set` trap report success back to the engine? (Module 1)"
+    - "From memory: how does a callback queued via `Promise.resolve().then(fn)` order relative to the surrounding synchronous code and to a `setTimeout(fn, 0)`? (Module 1)"
+    - "Before reading: how does a closure let an inner function keep reading and mutating a variable (like the currently-running effect) from an enclosing scope that has already returned?"
 ---
 
 # Module 5: Deep Reactivity Systems
@@ -117,8 +121,16 @@ flowchart LR
     Rerun -.->|new reads re-track| Track
 ```
 
-> **Self-Test:**
-> The `effect` above saves and restores `activeEffect`. Trace what would break if it used `activeEffect = null` instead, given `effect(() => { state.a; effect(() => state.b); state.c })`. *(The inner effect resets the active effect to null on exit, so `state.c` is read with no active effect — the outer effect never subscribes to `c` and silently stops updating.)*
+<SelfTest>
+
+The `effect` above saves and restores `activeEffect`. Trace what would break if it used `activeEffect = null` instead, given `effect(() => { state.a; effect(() => state.b); state.c })`.
+
+<template #answer>
+
+The inner effect resets the active effect to null on exit, so `state.c` is read with no active effect — the outer effect never subscribes to `c` and silently stops updating.
+
+</template>
+</SelfTest>
 
 ## 2. Signals (Fine-Grained Reactivity)
 Frameworks like [SolidJS](https://docs.solidjs.com/concepts/intro-to-reactivity) use **signals**: reactive primitives that hold state and track dependencies with no Virtual DOM.
@@ -227,5 +239,13 @@ function update() {           // re-run on change
 The reactivity is the generated `update()`, not a runtime observer.
 * **The tradeoff:** Less shipped runtime and no per-update diff cost, but reactivity is bounded by what the compiler can statically see. (Vue's experimental *[Vapor mode](https://github.com/vuejs/core-vapor)* applies the same idea to Vue's reactivity.)
 
-> **Self-Test:**
-> Three architectures, one question: when state changes, **what runs?** VDOM (React): the component function and its children, then a diff. Signals (Solid): only the specific effects subscribed to that signal. Compiled (Svelte): the exact DOM-write statements the compiler emitted for that variable. Name which pays at runtime vs. build time, and where each one's cost scales with component *size* vs. number of *changed values*.
+<SelfTest>
+
+Three architectures, one question: when state changes, **what runs?**
+
+<template #answer>
+
+VDOM (React): the component function and its children, then a diff. Signals (Solid): only the specific effects subscribed to that signal. Compiled (Svelte): the exact DOM-write statements the compiler emitted for that variable. Name which pays at runtime vs. build time, and where each one's cost scales with component *size* vs. number of *changed values*.
+
+</template>
+</SelfTest>

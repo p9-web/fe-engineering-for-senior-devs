@@ -36,6 +36,10 @@ learn:
     - "QUIC / HTTP/3 & TLS 1.3 specs"
     - "V8 streaming compilation"
   teachingApproach: "Count round-trips for one request, then show what each protocol and cache layer removes."
+  recall:
+    - "From memory: while a blocking `<script>` is still downloading, what is the single main thread doing, and what happens to the event loop and any queued microtasks until the bytes arrive? (Module 1)"
+    - "Before reading: recall V8's pipeline from source to execution (parse to bytecode to optimizing JIT) — which stage can begin before the full script has finished downloading? (Module 1)"
+    - "From memory: in the render and scheduling story (Modules 2-3), how does a script that arrives and mutates the DOM late force layout and paint to run again?"
 ---
 
 # Module 4: The Network & Execution Bridge
@@ -85,8 +89,16 @@ flowchart TD
     H3 --> Iso["Only the affected stream waits<br/>others keep flowing"]
 ```
 
-> **Self-Test:**
-> HTTP/2 multiplexes many streams over one TCP connection, yet a single dropped packet can still stall *all* of them. Why — and why is HTTP/3 immune? (TCP delivers bytes in strict order, so one lost segment blocks every multiplexed stream until retransmit. QUIC tracks loss per-stream, so only the affected stream waits.)
+<SelfTest>
+
+HTTP/2 multiplexes many streams over one TCP connection, yet a single dropped packet can still stall *all* of them. Why — and why is HTTP/3 immune?
+
+<template #answer>
+
+TCP delivers bytes in strict order, so one lost segment blocks every multiplexed stream until retransmit. QUIC tracks loss per-stream, so only the affected stream waits.
+
+</template>
+</SelfTest>
 
 ## 3. Resource Hints & Priority
 You can tell the browser what to fetch and how urgently.
@@ -121,8 +133,16 @@ flowchart TD
 * **Service Worker / Cache API:** Programmable, persists across sessions, works offline (below).
 * **The pattern that ties to Module 7:** ship content-**hashed** filenames (`app.4f3a.js`) with `Cache-Control: max-age=31536000, immutable`. `immutable` tells the browser **not to revalidate within `max-age`** (so it skips even the 304 round trip), and the hash changes only when content does — so you cache for a year *and* bust precisely. (`immutable` without a long `max-age` does nothing — the two go together.) Compression (`brotli` > `gzip`) shrinks transfer, and since fewer bytes means less to parse, it shortens time-to-execute too.
 
-> **Self-Test:**
-> A user reloads and the app is interactive in 200ms with no requests in the Network panel. Which cache layers could be responsible (memory, disk/HTTP, Service Worker), and how do you tell them apart in DevTools? Then: why is a content-hashed `immutable` bundle faster on *repeat* visits than an `ETag`-validated one? (A 304 still costs a round trip; `immutable` costs zero.)
+<SelfTest>
+
+A user reloads and the app is interactive in 200ms with no requests in the Network panel. Which cache layers could be responsible (memory, disk/HTTP, Service Worker), and how do you tell them apart in DevTools? Then: why is a content-hashed `immutable` bundle faster on *repeat* visits than an `ETag`-validated one?
+
+<template #answer>
+
+A 304 still costs a round trip; `immutable` costs zero.
+
+</template>
+</SelfTest>
 
 ## 5. Service Workers (The Programmable Proxy)
 A [Service Worker](https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API) is a JS worker between your page and the network, running off the main thread with no DOM access.
@@ -144,5 +164,13 @@ Apps don't just load once; they receive continuous data the runtime must process
 * **[Server-Sent Events (SSE)](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events):** Uni-directional text stream over plain HTTP. Simpler than WebSockets, auto-reconnects — perfect for feeds and notification counters.
 * **WebRTC:** Peer-to-peer over UDP — two browsers stream audio/video/data directly, the lowest-latency option. (**WebTransport**, over HTTP/3, is the emerging middle ground: low-latency, multiplexed, client-server.)
 
-> **Self-Test:**
-> You need to push a live "unread count" from server to client. SSE or WebSocket? (SSE: it's one-directional server→client, rides plain HTTP/2, and auto-reconnects — a WebSocket's bi-directional full-duplex machinery is wasted complexity here. Reach for WebSocket only when the *client* must also push at high frequency.)
+<SelfTest>
+
+You need to push a live "unread count" from server to client. SSE or WebSocket?
+
+<template #answer>
+
+SSE: it's one-directional server→client, rides plain HTTP/2, and auto-reconnects — a WebSocket's bi-directional full-duplex machinery is wasted complexity here. Reach for WebSocket only when the *client* must also push at high frequency.
+
+</template>
+</SelfTest>

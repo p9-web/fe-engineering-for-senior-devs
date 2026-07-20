@@ -34,6 +34,9 @@ learn:
     - "V8"
     - "Chrome Orinoco GC"
   teachingApproach: "Lead with the execution trace, then reveal the rule it forces."
+  recall:
+    - "From memory: what keeps a closure's captured variables alive after the outer function returns — and when does that become a leak?"
+    - "Before reading: if a Promise is already resolved, does its .then callback run synchronously? If not, when does it run?"
 ---
 
 # Module 1: Master JavaScript at the Runtime Level
@@ -68,17 +71,24 @@ sequenceDiagram
 ### Promise Queue Semantics & Starvation
 Because the microtask queue is emptied completely, if a microtask recursively queues another microtask, the event loop gets stuck. The browser cannot reach its render step, and tasks (like `setTimeout`) starve.
 
-> **Self-Test:**
->
-> ```js
-> console.log("A")
-> setTimeout(() => console.log("B"))
-> Promise.resolve().then(() => console.log("C"))
-> queueMicrotask(() => console.log("D"))
-> console.log("E")
-> ```
->
-> The output is `A E C D B`. Walk it: the script *is* the first task, so `A` and `E` run synchronously. When the script returns, the engine drains the **entire** microtask queue before any task — `C` then `D`, in enqueue order. Only then does the next task (`setTimeout`) run: `B`. The key insight is that `setTimeout(fn, 0)` does not mean "soon" — it means "after the current task *and* every microtask it spawned."
+<SelfTest variant="run">
+
+Predict the exact output, then run it:
+
+```js
+console.log("A")
+setTimeout(() => console.log("B"))
+Promise.resolve().then(() => console.log("C"))
+queueMicrotask(() => console.log("D"))
+console.log("E")
+```
+
+<template #answer>
+
+The output is `A E C D B`. Walk it: the script *is* the first task, so `A` and `E` run synchronously. When the script returns, the engine drains the **entire** microtask queue before any task — `C` then `D`, in enqueue order. Only then does the next task (`setTimeout`) run: `B`. The key insight is that `setTimeout(fn, 0)` does not mean "soon" — it means "after the current task *and* every microtask it spawned."
+
+</template>
+</SelfTest>
 
 ### async/await Is Just Microtask Sugar
 `await` does not block. The engine compiles the function into a **resumable frame** (think generator): hitting `await` suspends the frame and schedules its resumption as a microtask on the awaited promise. Everything after the `await` runs later.
@@ -123,13 +133,21 @@ A closure happens when a function "remembers" its lexical scope even after the o
 * **Detached DOM Nodes:** Removing a node from the DOM tree (`element.remove()`) does not free its memory if a JavaScript variable still references it. In a heap snapshot these show up as *Detached HTMLDivElement* — a classic leak.
 * **Escape hatches:** [`WeakRef`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakRef) holds a reference that *doesn't* prevent collection, and [`FinalizationRegistry`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/FinalizationRegistry) lets you run cleanup after collection. Both are tools of last resort — collection timing is non-deterministic.
 
-> **Self-Test:**
-> Why does this leak, and what one-word change fixes it?
-> ```js
-> const cache = new Map()
-> function remember(node) { cache.set(node, computeExpensiveThing(node)) }
-> ```
-> The `Map` holds a *strong* key reference, so every `node` ever passed in stays alive forever — even after it's removed from the DOM. Swap `Map` for `WeakMap`: keys become weakly held, and entries vanish when the node is otherwise unreachable. (This is exactly the structure Vue uses for dependency tracking — see Module 6.)
+<SelfTest>
+
+Why does this leak, and what one-word change fixes it?
+
+```js
+const cache = new Map()
+function remember(node) { cache.set(node, computeExpensiveThing(node)) }
+```
+
+<template #answer>
+
+The `Map` holds a *strong* key reference, so every `node` ever passed in stays alive forever — even after it's removed from the DOM. Swap `Map` for `WeakMap`: keys become weakly held, and entries vanish when the node is otherwise unreachable. (This is exactly the structure Vue uses for dependency tracking — see Module 6.)
+
+</template>
+</SelfTest>
 
 ### Watching the Collector (Without Stopping It)
 You can't *control* when V8 collects, but you can *observe* and *measure* — carefully.
@@ -138,8 +156,16 @@ You can't *control* when V8 collects, but you can *observe* and *measure* — ca
 * **Measuring the heap:** `performance.measureUserAgentSpecificMemory()` returns a breakdown of your tab's memory (DOM, JS, workers) — but it requires **cross-origin isolation** (the `COOP`/`COEP` headers of Module 16), precisely because a precise memory oracle is a side-channel risk. In DevTools, the three-snapshot technique (Module 3) is still the day-to-day tool for *finding* the retainer chain.
 * **Write barriers — why mutation isn't free:** generational GC only works if a young-gen scavenge can run *without* tracing the whole old generation. So V8 keeps a **remembered set** of old→young pointers, and every time you store a young object into an *old* one, a **write barrier** fires to record it. The practical cost: a long-lived cache or store that you constantly mutate to point at fresh objects isn't just allocating — each write pays barrier overhead and grows the set the next minor GC must scan. Steady-state churn in old-gen containers has a price even when nothing is "leaking."
 
-> **Self-Test:**
-> You add a `FinalizationRegistry` to close a `WebSocket` "when its wrapper object is collected," and connections sometimes leak for minutes or never close. Why is this the wrong tool, and where should the cleanup live? *(Finalizer timing is non-deterministic — V8 may delay or skip the callback entirely, and it certainly won't run promptly, so a resource whose release matters can stay open indefinitely. Deterministic cleanup belongs in explicit lifecycle code: a `close()`/`dispose()` method, `try/finally`, or a framework unmount hook. `FinalizationRegistry` is for *detecting* that something wasn't cleaned up, not for doing the cleanup.)*
+<SelfTest>
+
+You add a `FinalizationRegistry` to close a `WebSocket` "when its wrapper object is collected," and connections sometimes leak for minutes or never close. Why is this the wrong tool, and where should the cleanup live?
+
+<template #answer>
+
+Finalizer timing is non-deterministic — V8 may delay or skip the callback entirely, and it certainly won't run promptly, so a resource whose release matters can stay open indefinitely. Deterministic cleanup belongs in explicit lifecycle code: a `close()`/`dispose()` method, `try/finally`, or a framework unmount hook. `FinalizationRegistry` is for *detecting* that something wasn't cleaned up, not for doing the cleanup.
+
+</template>
+</SelfTest>
 
 ## 3. JavaScript Engine Internals (V8)
 JavaScript engines don't simply "interpret" or "compile" — they do both, in tiers, and move hot code up the tiers at runtime.
@@ -183,15 +209,23 @@ flowchart LR
     Mega --> Slow
 ```
 
-> **Self-Test:**
-> Without reading ahead, predict which loop produces faster property reads *downstream*, and explain why in terms of hidden classes:
-> ```js
-> // A
-> for (let i = 0; i < N; i++) pts.push({ x: i, y: i })
-> // B
-> for (let i = 0; i < N; i++) pts.push(i % 2 ? { x: i, y: i } : { y: i, x: i })
-> ```
-> *(Answer: A. The branch in B creates two different property-insertion orders → two hidden classes → any later `p.x` read site sees both shapes and goes polymorphic, losing the monomorphic fast path. Same fields, different order, real cost.)*
+<SelfTest>
+
+Without reading ahead, predict which loop produces faster property reads *downstream*, and explain why in terms of hidden classes:
+
+```js
+// A
+for (let i = 0; i < N; i++) pts.push({ x: i, y: i })
+// B
+for (let i = 0; i < N; i++) pts.push(i % 2 ? { x: i, y: i } : { y: i, x: i })
+```
+
+<template #answer>
+
+A. The branch in B creates two different property-insertion orders → two hidden classes → any later `p.x` read site sees both shapes and goes polymorphic, losing the monomorphic fast path. Same fields, different order, real cost.
+
+</template>
+</SelfTest>
 
 ## 4. The Prototype System
 JavaScript does not have traditional classes under the hood; it relies on objects linking to other objects via prototypes.
@@ -213,5 +247,13 @@ Add `greet` directly onto some instances but not others and you mint extra shape
 
 * **Getters, Setters, and Proxies:** Modern frameworks (like Vue.js) rely on [`Proxy`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) to intercept object operations (`get`, `set`, `has`, `deleteProperty`). This is what lets the framework automatically track dependencies and trigger UI updates whenever reactive state changes — the mechanism dissected in Module 5.
 
-> **Self-Test:**
-> A `Proxy`'s `get` trap fires on *every* read. What does that imply for the cost of a deeply nested reactive object that you read in a hot loop — and why does Vue 3 make reactivity *lazy* (only proxying nested objects when you actually access them)? *(Each property hop runs trap code instead of a raw load, so reading `a.b.c.d` in a loop multiplies trap overhead by depth × iterations — cache the leaf in a local. Lazy proxying means Vue pays to wrap a nested object only the first time you touch it, so a large state tree you never read costs nothing.)*
+<SelfTest>
+
+A `Proxy`'s `get` trap fires on *every* read. What does that imply for the cost of a deeply nested reactive object that you read in a hot loop — and why does Vue 3 make reactivity *lazy* (only proxying nested objects when you actually access them)?
+
+<template #answer>
+
+Each property hop runs trap code instead of a raw load, so reading `a.b.c.d` in a loop multiplies trap overhead by depth × iterations — cache the leaf in a local. Lazy proxying means Vue pays to wrap a nested object only the first time you touch it, so a large state tree you never read costs nothing.
+
+</template>
+</SelfTest>
